@@ -1,0 +1,8 @@
+{
+  "name": "TECHMAN AI LMS",
+  "description": "Complete AI-Powered Institute Management System, Public Admission Portal, Student & Lecturer LMS, Financial & QR Certificate Verification Platform for TECHMAN AI INSTITUTE & ACADEMY (Sri Lanka, 2027 Intake).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

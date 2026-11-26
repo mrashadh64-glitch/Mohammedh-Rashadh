@@ -1,0 +1,1068 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Public-safe user profile and role metadata for TECHMAN AI LMS (PII is isolated in /users/{uid}/private/pii).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "role": {
+          "type": "string",
+          "enum": [
+            "SUPER_ADMIN",
+            "ADMIN",
+            "BRANCH_MANAGER",
+            "COORDINATOR",
+            "ADMISSION_OFFICER",
+            "ACADEMIC_MANAGER",
+            "LECTURER",
+            "ACCOUNTANT",
+            "EXAMINER",
+            "CONTENT_MANAGER",
+            "STUDENT",
+            "AFFILIATE",
+            "SUPPORT_STAFF"
+          ]
+        },
+        "designation": { "type": "string", "maxLength": 80 },
+        "studentId": { "type": "string", "maxLength": 40 },
+        "lecturerId": { "type": "string", "maxLength": 40 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "accountStatus": { "type": "string", "enum": ["active", "suspended", "pending"] },
+        "xpPoints": { "type": "number" },
+        "streakDays": { "type": "number" },
+        "level": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role", "institutionId", "accountStatus"]
+    },
+    "UserPrivatePII": {
+      "title": "User Private PII",
+      "description": "Isolated personally identifiable information accessible only to the user and authorized institute administrators.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "whatsapp": { "type": "string", "maxLength": 32 },
+        "dateOfBirth": { "type": "string", "maxLength": 20 },
+        "gender": { "type": "string", "maxLength": 32 },
+        "address": { "type": "string", "maxLength": 300 },
+        "emergencyContact": { "type": "string", "maxLength": 160 },
+        "guardianName": { "type": "string", "maxLength": 120 },
+        "guardianPhone": { "type": "string", "maxLength": 32 },
+        "qualifications": { "type": "string", "maxLength": 300 },
+        "specialization": { "type": "string", "maxLength": 160 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "AdminRecord": {
+      "title": "Admin Record",
+      "description": "Authoritative administrative privilege record controlled by Super Admins.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 160 },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "ACCOUNTANT", "ADMISSION_OFFICER", "ACADEMIC_MANAGER", "EXAMINER", "CONTENT_MANAGER", "COORDINATOR"] },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "protectedOwner": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "RoleInvitation": {
+      "title": "Role Invitation",
+      "description": "Secure invitation for staff, lecturers, affiliates, or enrolled students to activate their role on verified sign-in.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 160 },
+        "fullName": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "maxLength": 40 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "studentId": { "type": "string", "maxLength": 40 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "revoked"] },
+        "invitedBy": { "type": "string", "maxLength": 128 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "status", "invitedBy", "institutionId"]
+    },
+    "RolePermissionConfig": {
+      "title": "Role Permission Configuration",
+      "description": "Configurable permission matrix per institutional role.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "maxLength": 40 },
+        "label": { "type": "string", "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 240 },
+        "permissions": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["role", "label", "permissions"]
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "Physical or online regional campus branch.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "maxLength": 24 },
+        "name": { "type": "string", "maxLength": 120 },
+        "city": { "type": "string", "maxLength": 80 },
+        "address": { "type": "string", "maxLength": 240 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "managerName": { "type": "string", "maxLength": 120 },
+        "coordinatorName": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "name", "city", "status", "institutionId"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Editable Certificate or Diploma programme in the 2027 catalog.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "maxLength": 32 },
+        "name": { "type": "string", "maxLength": 160 },
+        "category": { "type": "string", "enum": ["Certificate", "Diploma"] },
+        "domain": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 1200 },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "level": { "type": "string", "maxLength": 40 },
+        "duration": { "type": "string", "maxLength": 64 },
+        "mode": { "type": "string", "enum": ["Online", "Physical", "Hybrid"] },
+        "courseFeeLkr": { "type": "number" },
+        "registrationFeeLkr": { "type": "number" },
+        "certificateFeeLkr": { "type": "number" },
+        "installmentPlan": { "type": "string", "maxLength": 120 },
+        "lecturerId": { "type": "string", "maxLength": 128 },
+        "lecturerName": { "type": "string", "maxLength": 120 },
+        "batchName": { "type": "string", "maxLength": 80 },
+        "startDate": { "type": "string", "maxLength": 32 },
+        "endDate": { "type": "string", "maxLength": 32 },
+        "maxStudents": { "type": "number" },
+        "entryRequirements": { "type": "string", "maxLength": 400 },
+        "learningOutcomes": { "type": "array" },
+        "syllabusTopics": { "type": "array" },
+        "certificateEligible": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["published", "draft", "archived"] },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "name", "category", "duration", "mode", "courseFeeLkr", "status", "institutionId"]
+    },
+    "Lesson": {
+      "title": "Course Lesson",
+      "description": "Individual module lesson (video, live session, PDF notes, audio) under a course.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "maxLength": 128 },
+        "moduleTitle": { "type": "string", "maxLength": 140 },
+        "title": { "type": "string", "maxLength": 160 },
+        "type": { "type": "string", "enum": ["video", "live", "pdf", "audio", "reading"] },
+        "durationMinutes": { "type": "number" },
+        "orderIndex": { "type": "number" },
+        "videoUrl": { "type": "string", "maxLength": 500 },
+        "resourceUrl": { "type": "string", "maxLength": 500 },
+        "summary": { "type": "string", "maxLength": 2000 },
+        "published": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["courseId", "moduleTitle", "title", "type", "orderIndex", "published"]
+    },
+    "Application": {
+      "title": "Admission Application",
+      "description": "2027 student admission application with status lifecycle.",
+      "type": "object",
+      "properties": {
+        "applicationNumber": { "type": "string", "maxLength": 40 },
+        "fullName": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "whatsapp": { "type": "string", "maxLength": 32 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "preferredMode": { "type": "string", "enum": ["Online", "Physical", "Hybrid"] },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "batchName": { "type": "string", "maxLength": 80 },
+        "highestQualification": { "type": "string", "maxLength": 160 },
+        "documentNotes": { "type": "string", "maxLength": 400 },
+        "referralCode": { "type": "string", "maxLength": 40 },
+        "status": {
+          "type": "string",
+          "enum": ["Draft", "Submitted", "Under Review", "Documents Required", "Approved", "Rejected", "Payment Pending", "Enrolled"]
+        },
+        "rejectionReason": { "type": "string", "maxLength": 300 },
+        "assignedStudentId": { "type": "string", "maxLength": 40 },
+        "leadId": { "type": "string", "maxLength": 128 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["applicationNumber", "fullName", "email", "phone", "courseId", "courseName", "preferredMode", "status", "institutionId"]
+    },
+    "ApplicationTracker": {
+      "title": "Public Application Tracker",
+      "description": "PII-free public status projection keyed by applicationNumber.",
+      "type": "object",
+      "properties": {
+        "applicationNumber": { "type": "string", "maxLength": 40 },
+        "applicantInitials": { "type": "string", "maxLength": 24 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "status": { "type": "string", "maxLength": 40 },
+        "assignedStudentId": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["applicationNumber", "courseName", "status"]
+    },
+    "Enrollment": {
+      "title": "Course Enrollment",
+      "description": "Authoritative mapping between an authenticated student and a course/batch.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 40 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "batchName": { "type": "string", "maxLength": 80 },
+        "progressPercent": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "completed", "suspended"] },
+        "leadId": { "type": "string", "maxLength": 128 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "enrolledAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "studentId", "studentName", "courseId", "courseName", "status", "institutionId"]
+    },
+    "LearningProgress": {
+      "title": "Learning Progress",
+      "description": "Per-student lesson completion and video playback resume position.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "lessonId": { "type": "string", "maxLength": 128 },
+        "completed": { "type": "boolean" },
+        "lastPositionSec": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "courseId", "lessonId", "completed"]
+    },
+    "AttendanceRecord": {
+      "title": "Attendance Record",
+      "description": "Duplicate-proof attendance entry keyed by batch, date, and student.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "batchName": { "type": "string", "maxLength": 80 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "date": { "type": "string", "maxLength": 20 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 40 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "mode": { "type": "string", "enum": ["Online", "Physical", "QR"] },
+        "status": { "type": "string", "enum": ["Present", "Late", "Absent", "Excused"] },
+        "markedBy": { "type": "string", "maxLength": 128 },
+        "correctionReason": { "type": "string", "maxLength": 240 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["courseId", "date", "userId", "studentId", "studentName", "mode", "status", "markedBy"]
+    },
+    "Assignment": {
+      "title": "Assignment",
+      "description": "Course assignment or practical project brief.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "title": { "type": "string", "maxLength": 160 },
+        "instructions": { "type": "string", "maxLength": 2000 },
+        "dueDate": { "type": "string", "maxLength": 32 },
+        "maxMarks": { "type": "number" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["courseId", "title", "dueDate", "maxMarks", "createdBy"]
+    },
+    "Submission": {
+      "title": "Assignment Submission",
+      "description": "Student assignment upload and lecturer evaluation.",
+      "type": "object",
+      "properties": {
+        "assignmentId": { "type": "string", "maxLength": 128 },
+        "assignmentTitle": { "type": "string", "maxLength": 160 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "submissionUrl": { "type": "string", "maxLength": 500 },
+        "notes": { "type": "string", "maxLength": 1200 },
+        "status": { "type": "string", "enum": ["Submitted", "Late", "Evaluated", "Resubmit Requested"] },
+        "marks": { "type": "number" },
+        "feedback": { "type": "string", "maxLength": 1200 },
+        "evaluatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["assignmentId", "courseId", "userId", "studentName", "status"]
+    },
+    "Examination": {
+      "title": "Examination",
+      "description": "Timed quiz or examination with lecturer approval gate.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "title": { "type": "string", "maxLength": 160 },
+        "durationMinutes": { "type": "number" },
+        "passPercent": { "type": "number" },
+        "questions": { "type": "array" },
+        "approvalStatus": { "type": "string", "enum": ["draft", "approved", "archived"] },
+        "aiAssisted": { "type": "boolean" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "approvedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["courseId", "title", "durationMinutes", "passPercent", "approvalStatus", "createdBy"]
+    },
+    "ExamResult": {
+      "title": "Exam Result",
+      "description": "Student exam attempt with auto-scored MCQ and lecturer-approved final mark.",
+      "type": "object",
+      "properties": {
+        "examId": { "type": "string", "maxLength": 128 },
+        "examTitle": { "type": "string", "maxLength": 160 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "autoScorePercent": { "type": "number" },
+        "finalScorePercent": { "type": "number" },
+        "grade": { "type": "string", "maxLength": 16 },
+        "passed": { "type": "boolean" },
+        "resultStatus": { "type": "string", "enum": ["pending_approval", "published"] },
+        "aiFeedbackDraft": { "type": "string", "maxLength": 1200 },
+        "approvedBy": { "type": "string", "maxLength": 128 },
+        "submittedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["examId", "courseId", "userId", "studentName", "autoScorePercent", "resultStatus"]
+    },
+    "Payment": {
+      "title": "Fee Payment",
+      "description": "Student LKR fee payment requiring accountant verification before receipt issuance.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 40 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "feeType": { "type": "string", "enum": ["Registration", "Course Fee", "Installment", "Certificate Fee"] },
+        "amountLkr": { "type": "number" },
+        "method": { "type": "string", "enum": ["Cash", "Bank Transfer", "Card", "Online Gateway", "QR Payment"] },
+        "referenceNo": { "type": "string", "maxLength": 80 },
+        "proofNotes": { "type": "string", "maxLength": 400 },
+        "status": { "type": "string", "enum": ["Pending Verification", "Verified", "Rejected", "Refunded"] },
+        "receiptNumber": { "type": "string", "maxLength": 40 },
+        "verifiedBy": { "type": "string", "maxLength": 128 },
+        "rejectionReason": { "type": "string", "maxLength": 240 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "studentName", "courseName", "feeType", "amountLkr", "method", "status", "institutionId"]
+    },
+    "Expense": {
+      "title": "Institute Expense",
+      "description": "Operational expense tracked by Accountant or Super Admin.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 140 },
+        "category": { "type": "string", "maxLength": 64 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "amountLkr": { "type": "number" },
+        "date": { "type": "string", "maxLength": 20 },
+        "recordedBy": { "type": "string", "maxLength": 128 },
+        "institutionId": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["title", "category", "amountLkr", "date", "recordedBy", "institutionId"]
+    },
+    "Certificate": {
+      "title": "Digital Certificate",
+      "description": "Issued academic credential publicly verifiable via certificateNumber and QR code.",
+      "type": "object",
+      "properties": {
+        "certificateNumber": { "type": "string", "maxLength": 48 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 40 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "category": { "type": "string", "enum": ["Certificate", "Diploma"] },
+        "completionDate": { "type": "string", "maxLength": 24 },
+        "issueDate": { "type": "string", "maxLength": 24 },
+        "issuingInstitution": { "type": "string", "maxLength": 120 },
+        "signatoryName": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["Issued", "Revoked", "Reissued"] },
+        "revocationReason": { "type": "string", "maxLength": 240 },
+        "issuedBy": { "type": "string", "maxLength": 128 },
+        "institutionId": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["certificateNumber", "studentName", "courseName", "issueDate", "issuingInstitution", "status", "institutionId"]
+    },
+    "LibraryResource": {
+      "title": "Digital Library Resource",
+      "description": "E-books, PDF notes, templates, and recorded references.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 160 },
+        "category": { "type": "string", "maxLength": 64 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "resourceType": { "type": "string", "enum": ["E-Book", "PDF Notes", "Template", "Recorded Lecture", "Project Brief"] },
+        "version": { "type": "string", "maxLength": 24 },
+        "url": { "type": "string", "maxLength": 500 },
+        "summary": { "type": "string", "maxLength": 600 },
+        "accessLevel": { "type": "string", "enum": ["public", "enrolled"] },
+        "uploadedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "category", "resourceType", "accessLevel", "uploadedBy"]
+    },
+    "CommunityPost": {
+      "title": "Community Post",
+      "description": "Moderated student discussion, Q&A, or student project showcase entry.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 120 },
+        "authorRole": { "type": "string", "maxLength": 40 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "postType": { "type": "string", "enum": ["Discussion", "Lecturer Q&A", "Project Showcase", "Announcement"] },
+        "title": { "type": "string", "maxLength": 160 },
+        "body": { "type": "string", "maxLength": 2400 },
+        "projectUrl": { "type": "string", "maxLength": 400 },
+        "moderatedStatus": { "type": "string", "enum": ["active", "reported", "hidden"] },
+        "likesCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "authorName", "postType", "title", "body", "moderatedStatus"]
+    },
+    "AffiliateRecord": {
+      "title": "Affiliate Partner Record",
+      "description": "Referral partner tracking code, conversions, and owner-approved commissions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "partnerName": { "type": "string", "maxLength": 120 },
+        "referralCode": { "type": "string", "maxLength": 32 },
+        "commissionRatePercent": { "type": "number" },
+        "leadsCount": { "type": "number" },
+        "conversionsCount": { "type": "number" },
+        "pendingCommissionLkr": { "type": "number" },
+        "approvedCommissionLkr": { "type": "number" },
+        "withdrawalRequestedLkr": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "pending_review", "suspended"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "partnerName", "referralCode", "commissionRatePercent", "status"]
+    },
+    "CmsItem": {
+      "title": "Website CMS & Media Asset",
+      "description": "Admin-managed news, events, FAQs, banners, success stories, and AI-organized media.",
+      "type": "object",
+      "properties": {
+        "itemType": { "type": "string", "enum": ["News", "Event", "Story", "FAQ", "Poster", "Banner"] },
+        "title": { "type": "string", "maxLength": 180 },
+        "summary": { "type": "string", "maxLength": 1600 },
+        "category": { "type": "string", "maxLength": 64 },
+        "imageUrl": { "type": "string", "maxLength": 600 },
+        "eventDate": { "type": "string", "maxLength": 32 },
+        "aiSuggestedTags": { "type": "array" },
+        "status": { "type": "string", "enum": ["draft", "published"] },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["itemType", "title", "summary", "status", "institutionId"]
+    },
+    "AIConversation": {
+      "title": "Private AI Tutor Conversation",
+      "description": "Private student conversation with TECHMAN AI Tutor.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "language": { "type": "string", "enum": ["English", "Tamil", "Sinhala"] },
+        "prompt": { "type": "string", "maxLength": 2000 },
+        "response": { "type": "string", "maxLength": 8000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "language", "prompt", "response"]
+    },
+    "CareerProfile": {
+      "title": "Student Career Profile",
+      "description": "Student CV summary, verified skills, and AI career readiness data.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "headline": { "type": "string", "maxLength": 160 },
+        "bio": { "type": "string", "maxLength": 1200 },
+        "skills": { "type": "array" },
+        "portfolioUrl": { "type": "string", "maxLength": 300 },
+        "targetRole": { "type": "string", "maxLength": 120 },
+        "aiResumeDraft": { "type": "string", "maxLength": 8000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "headline"]
+    },
+    "Notification": {
+      "title": "In-App Notification",
+      "description": "User notification for admissions, payments, classes, exams, or certificates.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 140 },
+        "message": { "type": "string", "maxLength": 500 },
+        "category": { "type": "string", "maxLength": 40 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message", "read"]
+    },
+    "Inquiry": {
+      "title": "Public Contact Inquiry",
+      "description": "Prospective student or parent inquiry submitted from the public website.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "subject": { "type": "string", "maxLength": 160 },
+        "message": { "type": "string", "maxLength": 1500 },
+        "status": { "type": "string", "enum": ["new", "responded", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "subject", "message", "status"]
+    },
+    "AuditLog": {
+      "title": "Immutable Audit Log",
+      "description": "Append-only security, administrative, and financial action record.",
+      "type": "object",
+      "properties": {
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 160 },
+        "actorRole": { "type": "string", "maxLength": 40 },
+        "action": { "type": "string", "maxLength": 120 },
+        "targetType": { "type": "string", "maxLength": 64 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 600 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorUid", "actorEmail", "action", "targetType", "institutionId"]
+    },
+    "SystemSettings": {
+      "title": "Institution & Multi-Tenant SaaS Settings",
+      "description": "Owner-controlled institute configuration, commission rules, gamification rules, and SaaS tenant flags.",
+      "type": "object",
+      "properties": {
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "instituteName": { "type": "string", "maxLength": 140 },
+        "platformName": { "type": "string", "maxLength": 80 },
+        "website": { "type": "string", "maxLength": 160 },
+        "contactPhone": { "type": "string", "maxLength": 32 },
+        "currency": { "type": "string", "maxLength": 12 },
+        "academicIntake": { "type": "string", "maxLength": 16 },
+        "defaultAffiliateCommissionPercent": { "type": "number" },
+        "xpPerLesson": { "type": "number" },
+        "xpPerAssignment": { "type": "number" },
+        "publicTenantRegistrationEnabled": { "type": "boolean" },
+        "catalogInitialized": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["institutionId", "instituteName", "currency", "academicIntake"]
+    },
+    "MigratedStudent": {
+      "title": "Migrated Student Record",
+      "description": "Super Admin approved bulk-migrated student record with source provenance, custom fields archive, and secure activation tracking.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "maxLength": 40 },
+        "fullName": { "type": "string", "maxLength": 140 },
+        "firstName": { "type": "string", "maxLength": 80 },
+        "lastName": { "type": "string", "maxLength": 80 },
+        "email": { "type": "string", "maxLength": 160 },
+        "mobile": { "type": "string", "maxLength": 40 },
+        "whatsapp": { "type": "string", "maxLength": 40 },
+        "address": { "type": "string", "maxLength": 360 },
+        "dateOfBirth": { "type": "string", "maxLength": 32 },
+        "gender": { "type": "string", "maxLength": 32 },
+        "guardianName": { "type": "string", "maxLength": 140 },
+        "guardianContact": { "type": "string", "maxLength": 40 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 200 },
+        "courseCode": { "type": "string", "maxLength": 40 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "branchName": { "type": "string", "maxLength": 120 },
+        "batchName": { "type": "string", "maxLength": 100 },
+        "admissionDate": { "type": "string", "maxLength": 40 },
+        "academicYear": { "type": "string", "maxLength": 16 },
+        "registrationFeeLkr": { "type": "number" },
+        "courseFeeLkr": { "type": "number" },
+        "amountPaidLkr": { "type": "number" },
+        "outstandingBalanceLkr": { "type": "number" },
+        "paymentStatus": { "type": "string", "maxLength": 64 },
+        "legacyPaymentStatus": { "type": "string", "enum": ["none", "legacy_imported_pending_reconciliation", "reconciled"] },
+        "studentStatus": { "type": "string", "maxLength": 40 },
+        "additionalInfo": { "type": "string", "maxLength": 1200 },
+        "customFieldsJson": { "type": "string", "maxLength": 8000 },
+        "importBatchId": { "type": "string", "maxLength": 64 },
+        "sourceFileName": { "type": "string", "maxLength": 200 },
+        "sourceSheetName": { "type": "string", "maxLength": 120 },
+        "sourceRowNumber": { "type": "number" },
+        "importedByEmail": { "type": "string", "maxLength": 160 },
+        "importedAt": { "type": "string", "format": "date-time" },
+        "accountActivationStatus": { "type": "string", "enum": ["not_activated", "invited", "activated"] },
+        "invitationId": { "type": "string", "maxLength": 128 },
+        "isMigrated": { "type": "boolean" },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "fullName", "academicYear", "studentStatus", "importBatchId", "sourceFileName", "sourceSheetName", "sourceRowNumber", "importedByEmail", "importedAt", "accountActivationStatus", "isMigrated", "institutionId"]
+    },
+    "MigrationBatch": {
+      "title": "Bulk Migration Batch",
+      "description": "Audit and rollback metadata for each Super Admin bulk student migration batch.",
+      "type": "object",
+      "properties": {
+        "sourceFileName": { "type": "string", "maxLength": 200 },
+        "sourceSheetName": { "type": "string", "maxLength": 120 },
+        "academicYear": { "type": "string", "maxLength": 16 },
+        "idPrefix": { "type": "string", "maxLength": 16 },
+        "totalRows": { "type": "number" },
+        "importedCount": { "type": "number" },
+        "updatedCount": { "type": "number" },
+        "skippedCount": { "type": "number" },
+        "failedCount": { "type": "number" },
+        "duplicateCount": { "type": "number" },
+        "createdRecordIds": { "type": "array" },
+        "backupSnapshotSummary": { "type": "string", "maxLength": 400 },
+        "status": { "type": "string", "enum": ["completed", "rolled_back"] },
+        "importedByUid": { "type": "string", "maxLength": 128 },
+        "importedByEmail": { "type": "string", "maxLength": 160 },
+        "importedAt": { "type": "string", "format": "date-time" },
+        "rolledBackAt": { "type": "string", "format": "date-time" },
+        "institutionId": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["sourceFileName", "sourceSheetName", "academicYear", "idPrefix", "totalRows", "importedCount", "updatedCount", "skippedCount", "failedCount", "duplicateCount", "createdRecordIds", "status", "importedByUid", "importedByEmail", "importedAt", "institutionId"]
+    },
+    "SpecialProgramme": {
+      "title": "Special Outreach & Skill Development Programme",
+      "description": "Admin-editable structured programme data for flagship initiatives such as the TECHMAN FREE SKILL DEVELOPMENT PROGRAMME.",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string", "maxLength": 80 },
+        "title": { "type": "string", "maxLength": 180 },
+        "theme": { "type": "string", "maxLength": 240 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "feeBadge": { "type": "string", "maxLength": 80 },
+        "feeSummary": { "type": "string", "maxLength": 500 },
+        "schedule": { "type": "string", "maxLength": 120 },
+        "availability": { "type": "string", "maxLength": 120 },
+        "programmeType": { "type": "string", "maxLength": 120 },
+        "deliveryLocation": { "type": "string", "maxLength": 200 },
+        "trainerName": { "type": "string", "maxLength": 120 },
+        "trainerPosition": { "type": "string", "maxLength": 160 },
+        "trainerTitle": { "type": "string", "maxLength": 160 },
+        "trainerPhotoUrl": { "type": "string", "maxLength": 500 },
+        "trainerBio": { "type": "string", "maxLength": 1200 },
+        "posterUrl": { "type": "string", "maxLength": 500 },
+        "galleryUrls": { "type": "array" },
+        "modules": { "type": "array" },
+        "benefits": { "type": "array" },
+        "status": { "type": "string", "enum": ["published", "draft"] },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["slug", "title", "theme", "feeBadge", "feeSummary", "schedule", "availability", "programmeType", "deliveryLocation", "trainerName", "trainerPosition", "trainerTitle", "modules", "benefits", "status", "institutionId"]
+    },
+    "ProgrammeEnquiry": {
+      "title": "Host Institution Programme Enquiry",
+      "description": "Enquiry submitted by a school, campus, or host institution requesting the TECHMAN FREE SKILL DEVELOPMENT PROGRAMME.",
+      "type": "object",
+      "properties": {
+        "programmeSlug": { "type": "string", "maxLength": 80 },
+        "programmeTitle": { "type": "string", "maxLength": 180 },
+        "institutionName": { "type": "string", "maxLength": 160 },
+        "contactPerson": { "type": "string", "maxLength": 120 },
+        "mobileNumber": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "institutionAddress": { "type": "string", "maxLength": 300 },
+        "district": { "type": "string", "maxLength": 80 },
+        "expectedParticipants": { "type": "number" },
+        "preferredDate": { "type": "string", "maxLength": 32 },
+        "additionalMessage": { "type": "string", "maxLength": 1500 },
+        "status": { "type": "string", "enum": ["new", "reviewed", "scheduled", "completed", "declined"] },
+        "adminNotes": { "type": "string", "maxLength": 600 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["programmeSlug", "programmeTitle", "institutionName", "contactPerson", "mobileNumber", "email", "institutionAddress", "district", "expectedParticipants", "preferredDate", "status", "institutionId"]
+    },
+    "Lead": {
+      "title": "CRM Student Lead",
+      "description": "Prospective student enquiry and admissions pipeline record with RBAC isolation and conversion traceability.",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string", "maxLength": 48 },
+        "fullName": { "type": "string", "maxLength": 140 },
+        "mobile": { "type": "string", "maxLength": 32 },
+        "normalizedMobile": { "type": "string", "maxLength": 32 },
+        "whatsapp": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 160 },
+        "dateOfBirth": { "type": "string", "maxLength": 24 },
+        "gender": { "type": "string", "maxLength": 32 },
+        "address": { "type": "string", "maxLength": 300 },
+        "city": { "type": "string", "maxLength": 80 },
+        "district": { "type": "string", "maxLength": 80 },
+        "interestedCourseId": { "type": "string", "maxLength": 128 },
+        "interestedCourseName": { "type": "string", "maxLength": 160 },
+        "courseCategory": { "type": "string", "maxLength": 64 },
+        "preferredBranchId": { "type": "string", "maxLength": 64 },
+        "preferredBranchName": { "type": "string", "maxLength": 120 },
+        "preferredStudyMode": { "type": "string", "maxLength": 32 },
+        "educationQualification": { "type": "string", "maxLength": 160 },
+        "academicYear": { "type": "string", "maxLength": 16 },
+        "leadSource": { "type": "string", "maxLength": 80 },
+        "campaignName": { "type": "string", "maxLength": 120 },
+        "adReference": { "type": "string", "maxLength": 120 },
+        "socialMediaPlatform": { "type": "string", "maxLength": 64 },
+        "referralName": { "type": "string", "maxLength": 120 },
+        "enquiryDate": { "type": "string", "maxLength": 32 },
+        "status": {
+          "type": "string",
+          "enum": ["New Lead", "Contacted", "Follow-up Required", "Interested", "Application Started", "Converted to Student", "Not Interested", "Lost", "Invalid Contact"]
+        },
+        "assignedToUid": { "type": "string", "maxLength": 128 },
+        "assignedToName": { "type": "string", "maxLength": 120 },
+        "lastContactDate": { "type": "string", "maxLength": 32 },
+        "nextFollowUpDate": { "type": "string", "maxLength": 32 },
+        "followUpNotes": { "type": "string", "maxLength": 2000 },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High", "Urgent"] },
+        "notInterestedReason": { "type": "string", "maxLength": 300 },
+        "convertedApplicationId": { "type": "string", "maxLength": 128 },
+        "convertedStudentId": { "type": "string", "maxLength": 40 },
+        "convertedAt": { "type": "string", "maxLength": 40 },
+        "convertedByUid": { "type": "string", "maxLength": 128 },
+        "convertedByName": { "type": "string", "maxLength": 120 },
+        "importBatchId": { "type": "string", "maxLength": 64 },
+        "archived": { "type": "boolean" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["leadId", "fullName", "mobile", "status", "institutionId"]
+    },
+    "LeadActivity": {
+      "title": "Lead Activity Log",
+      "description": "Append-only timeline of lead status transitions, calls, notes, assignments, and student conversion.",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string", "maxLength": 128 },
+        "leadCode": { "type": "string", "maxLength": 48 },
+        "actionType": {
+          "type": "string",
+          "enum": ["created", "status_change", "note_added", "assigned", "call_logged", "whatsapp_opened", "converted", "merged", "edited", "archived"]
+        },
+        "previousStatus": { "type": "string", "maxLength": 48 },
+        "newStatus": { "type": "string", "maxLength": 48 },
+        "note": { "type": "string", "maxLength": 1000 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "maxLength": 120 },
+        "actorRole": { "type": "string", "maxLength": 40 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["leadId", "actionType", "note", "actorUid", "actorName", "institutionId", "createdAt"]
+    },
+    "LeadImportBatch": {
+      "title": "Lead Bulk Import Batch",
+      "description": "Audit record for bulk Excel/CSV lead import sessions.",
+      "type": "object",
+      "properties": {
+        "fileName": { "type": "string", "maxLength": 200 },
+        "sheetName": { "type": "string", "maxLength": 120 },
+        "totalRows": { "type": "number" },
+        "importedCount": { "type": "number" },
+        "mergedCount": { "type": "number" },
+        "skippedDuplicates": { "type": "number" },
+        "errorCount": { "type": "number" },
+        "backupExported": { "type": "boolean" },
+        "importedByUid": { "type": "string", "maxLength": 128 },
+        "importedByEmail": { "type": "string", "maxLength": 160 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fileName", "totalRows", "importedCount", "mergedCount", "skippedDuplicates", "errorCount", "backupExported", "importedByUid", "importedByEmail", "institutionId", "createdAt"]
+    },
+    "CourseSyllabus": {
+      "title": "Course Syllabus Registry",
+      "description": "Master syllabus record linked to an official course, pointing to its current published version and approval status.",
+      "type": "object",
+      "properties": {
+        "syllabusId": { "type": "string", "maxLength": 64 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseCode": { "type": "string", "maxLength": 40 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "programmeName": { "type": "string", "maxLength": 160 },
+        "academicYear": { "type": "string", "maxLength": 24 },
+        "totalCourseDuration": { "type": "string", "maxLength": 64 },
+        "latestVersionNumber": { "type": "number" },
+        "publishedVersionNumber": { "type": "number" },
+        "publishedVersionId": { "type": "string", "maxLength": 128 },
+        "latestVersionId": { "type": "string", "maxLength": 128 },
+        "approvalStatus": { "type": "string", "enum": ["Draft", "Pending Review", "Approved", "Published", "Archived"] },
+        "publishedStatus": { "type": "string", "enum": ["unpublished", "published", "archived"] },
+        "moduleCount": { "type": "number" },
+        "topicCount": { "type": "number" },
+        "hasFileAttachment": { "type": "boolean" },
+        "latestFileName": { "type": "string", "maxLength": 200 },
+        "latestFileUrl": { "type": "string", "maxLength": 1000 },
+        "latestFileMimeType": { "type": "string", "maxLength": 120 },
+        "announcementNote": { "type": "string", "maxLength": 600 },
+        "uploadedByUid": { "type": "string", "maxLength": 128 },
+        "uploadedByName": { "type": "string", "maxLength": 120 },
+        "approvedByUid": { "type": "string", "maxLength": 128 },
+        "approvedByName": { "type": "string", "maxLength": 120 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["syllabusId", "courseId", "courseName", "academicYear", "latestVersionNumber", "approvalStatus", "publishedStatus", "moduleCount", "uploadedByUid", "uploadedByName", "institutionId"]
+    },
+    "SyllabusVersion": {
+      "title": "Course Syllabus Version Snapshot",
+      "description": "Immutable versioned snapshot of a course syllabus containing structured modules, topics, assessments, and document attachments.",
+      "type": "object",
+      "properties": {
+        "syllabusId": { "type": "string", "maxLength": 64 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "programmeName": { "type": "string", "maxLength": 160 },
+        "academicYear": { "type": "string", "maxLength": 24 },
+        "versionNumber": { "type": "number" },
+        "status": { "type": "string", "enum": ["Draft", "Pending Review", "Approved", "Published", "Archived"] },
+        "changeSummary": { "type": "string", "maxLength": 500 },
+        "totalCourseDuration": { "type": "string", "maxLength": 64 },
+        "finalAssessment": { "type": "string", "maxLength": 1500 },
+        "announcementNote": { "type": "string", "maxLength": 600 },
+        "attachment": { "type": "object" },
+        "supportingResources": { "type": "array" },
+        "modules": { "type": "array" },
+        "restoredFromVersion": { "type": "number" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 120 },
+        "createdByRole": { "type": "string", "maxLength": 40 },
+        "approvedByUid": { "type": "string", "maxLength": 128 },
+        "approvedByName": { "type": "string", "maxLength": 120 },
+        "publishedAt": { "type": "string", "format": "date-time" },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["syllabusId", "courseId", "courseName", "academicYear", "versionNumber", "status", "modules", "createdByUid", "createdByName", "institutionId", "createdAt"]
+    },
+    "ModuleProgress": {
+      "title": "Student Syllabus Module Progress",
+      "description": "Explicit per-student completion state across syllabus modules, topics, practical activities, and assignments.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "syllabusId": { "type": "string", "maxLength": 64 },
+        "versionNumber": { "type": "number" },
+        "completedModuleIds": { "type": "array" },
+        "completedTopicIds": { "type": "array" },
+        "completedActivityIds": { "type": "array" },
+        "completedAssignmentIds": { "type": "array" },
+        "totalTrackableItems": { "type": "number" },
+        "completedTrackableItems": { "type": "number" },
+        "progressPercent": { "type": "number" },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "courseId", "syllabusId", "completedModuleIds", "completedTopicIds", "completedActivityIds", "completedAssignmentIds", "totalTrackableItems", "completedTrackableItems", "progressPercent", "institutionId", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public-safe user profile and role state."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivatePII" },
+      "description": "Isolated PII document (/users/{userId}/private/pii)."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Authoritative administrative staff records."
+    },
+    "/roleInvitations/{invitationId}": {
+      "schema": { "$ref": "#/entities/RoleInvitation" },
+      "description": "Email-based role activation invitations."
+    },
+    "/rolePermissions/{roleKey}": {
+      "schema": { "$ref": "#/entities/RolePermissionConfig" },
+      "description": "Configurable 13-role RBAC permission matrix."
+    },
+    "/branches/{branchId}": {
+      "schema": { "$ref": "#/entities/Branch" },
+      "description": "Institute branches and coordinators."
+    },
+    "/courses/{courseId}": {
+      "schema": { "$ref": "#/entities/Course" },
+      "description": "Editable 2027 course catalogue."
+    },
+    "/courses/{courseId}/lessons/{lessonId}": {
+      "schema": { "$ref": "#/entities/Lesson" },
+      "description": "Course lessons and module content."
+    },
+    "/applications/{applicationId}": {
+      "schema": { "$ref": "#/entities/Application" },
+      "description": "Student admission applications."
+    },
+    "/applicationTrackers/{applicationNumber}": {
+      "schema": { "$ref": "#/entities/ApplicationTracker" },
+      "description": "Public PII-free application tracking records."
+    },
+    "/enrollments/{enrollmentId}": {
+      "schema": { "$ref": "#/entities/Enrollment" },
+      "description": "Authoritative student course enrollments."
+    },
+    "/learningProgress/{progressId}": {
+      "schema": { "$ref": "#/entities/LearningProgress" },
+      "description": "Lesson completion and video playback progress."
+    },
+    "/attendance/{attendanceId}": {
+      "schema": { "$ref": "#/entities/AttendanceRecord" },
+      "description": "Daily Online/Physical/QR attendance records."
+    },
+    "/assignments/{assignmentId}": {
+      "schema": { "$ref": "#/entities/Assignment" },
+      "description": "Course assignments and projects."
+    },
+    "/submissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/Submission" },
+      "description": "Student submissions and evaluations."
+    },
+    "/examinations/{examId}": {
+      "schema": { "$ref": "#/entities/Examination" },
+      "description": "Timed MCQ and essay examinations."
+    },
+    "/examResults/{resultId}": {
+      "schema": { "$ref": "#/entities/ExamResult" },
+      "description": "Exam attempt results and approved final grades."
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "LKR fee payment submissions and verified receipts."
+    },
+    "/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/Expense" },
+      "description": "Institute operational expenses."
+    },
+    "/certificates/{certificateNumber}": {
+      "schema": { "$ref": "#/entities/Certificate" },
+      "description": "Issued digital certificates publicly verifiable by certificate number."
+    },
+    "/libraryResources/{resourceId}": {
+      "schema": { "$ref": "#/entities/LibraryResource" },
+      "description": "Digital library assets."
+    },
+    "/communityPosts/{postId}": {
+      "schema": { "$ref": "#/entities/CommunityPost" },
+      "description": "Student forum and project showcase."
+    },
+    "/affiliates/{userId}": {
+      "schema": { "$ref": "#/entities/AffiliateRecord" },
+      "description": "Affiliate referral metrics and commissions."
+    },
+    "/cmsItems/{itemId}": {
+      "schema": { "$ref": "#/entities/CmsItem" },
+      "description": "Website news, events, FAQs, banners, and AI-organized posters."
+    },
+    "/aiConversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/AIConversation" },
+      "description": "Owner-private AI tutor conversations."
+    },
+    "/careerProfiles/{userId}": {
+      "schema": { "$ref": "#/entities/CareerProfile" },
+      "description": "Student career center CV and portfolio data."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User-scoped in-app notifications."
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/Inquiry" },
+      "description": "Public contact inquiries."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable administrative and financial audit trail."
+    },
+    "/systemSettings/{institutionId}": {
+      "schema": { "$ref": "#/entities/SystemSettings" },
+      "description": "Institute and multi-tenant SaaS configuration."
+    },
+    "/migratedStudents/{studentId}": {
+      "schema": { "$ref": "#/entities/MigratedStudent" },
+      "description": "Private Super Admin bulk-migrated student records with full audit provenance."
+    },
+    "/migrationBatches/{batchId}": {
+      "schema": { "$ref": "#/entities/MigrationBatch" },
+      "description": "Bulk student migration batch history and safe rollback registry."
+    },
+    "/specialProgrammes/{programmeId}": {
+      "schema": { "$ref": "#/entities/SpecialProgramme" },
+      "description": "Publicly readable (when published) special outreach programmes managed by Super Admins."
+    },
+    "/programmeEnquiries/{enquiryId}": {
+      "schema": { "$ref": "#/entities/ProgrammeEnquiry" },
+      "description": "Private institutional enquiries for special outreach programmes, isolated from student records."
+    },
+    "/leads/{leadId}": {
+      "schema": { "$ref": "#/entities/Lead" },
+      "description": "Role-scoped CRM leads and admission follow-up pipeline records."
+    },
+    "/leadActivities/{activityId}": {
+      "schema": { "$ref": "#/entities/LeadActivity" },
+      "description": "Immutable activity and status change history for CRM leads."
+    },
+    "/leadImportBatches/{batchId}": {
+      "schema": { "$ref": "#/entities/LeadImportBatch" },
+      "description": "Admin audit history of bulk Excel/CSV lead import batches."
+    },
+    "/syllabuses/{syllabusId}": {
+      "schema": { "$ref": "#/entities/CourseSyllabus" },
+      "description": "Course-linked syllabus registry with approval and publishing governance."
+    },
+    "/syllabusVersions/{versionId}": {
+      "schema": { "$ref": "#/entities/SyllabusVersion" },
+      "description": "Immutable versioned syllabus snapshots supporting non-destructive updates and restoration."
+    },
+    "/moduleProgress/{progressId}": {
+      "schema": { "$ref": "#/entities/ModuleProgress" },
+      "description": "Student-owned syllabus module, topic, activity, and assignment completion progress."
+    }
+  }
+}
