@@ -1,13 +1,23 @@
-import { collection, getDocs, limit, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 import { getSpecialProgrammeBySlug } from './firestoreService';
 import {
+  DEFAULT_BRAND_SETTINGS,
   DEFAULT_FREE_SKILL_PROGRAMME,
+  INSTITUTE_INFO,
   SEED_BRANCHES,
   SEED_CMS_ITEMS,
   SEED_COURSES,
 } from '../data/catalogSeed';
-import { Branch, CmsItem, CommunityPost, Course, SpecialProgramme } from '../types/lms';
+import {
+  Branch,
+  BrandSettings,
+  CmsItem,
+  CommunityPost,
+  Course,
+  GeneratedPoster,
+  SpecialProgramme,
+} from '../types/lms';
 
 export interface PublicCatalogPayload {
   courses: Course[];
@@ -15,10 +25,12 @@ export interface PublicCatalogPayload {
   cmsItems: CmsItem[];
   showcasePosts: CommunityPost[];
   specialProgramme: SpecialProgramme;
+  publishedPosters: GeneratedPoster[];
+  brandSettings: BrandSettings;
   fetchedAt: number;
 }
 
-const CACHE_KEY = 'techman_public_catalog_v1';
+const CACHE_KEY = 'techman_public_catalog_v2';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes for public non-PII catalog data
 
 let memoryCache: PublicCatalogPayload | null = null;
@@ -31,7 +43,11 @@ function readSessionCache(): PublicCatalogPayload | null {
     const parsed = JSON.parse(raw) as PublicCatalogPayload;
     if (!parsed || typeof parsed.fetchedAt !== 'number') return null;
     if (Date.now() - parsed.fetchedAt > CACHE_TTL_MS) return null;
-    return parsed;
+    return {
+      ...parsed,
+      publishedPosters: Array.isArray(parsed.publishedPosters) ? parsed.publishedPosters : [],
+      brandSettings: parsed.brandSettings || DEFAULT_BRAND_SETTINGS,
+    };
   } catch {
     return null;
   }
@@ -69,6 +85,7 @@ export function invalidatePublicCatalogCache(): void {
 /**
  * Fetches bounded public-only catalog collections with in-flight deduplication and 5-minute TTL cache.
  * Never caches private student records or authenticated PII.
+ * Posters query strictly enforces status == 'published' so unapproved/draft/rejected posters never leak publicly.
  */
 export async function fetchPublicCatalogOptimized(forceRefresh = false): Promise<PublicCatalogPayload> {
   if (!forceRefresh) {
@@ -79,15 +96,20 @@ export async function fetchPublicCatalogOptimized(forceRefresh = false): Promise
 
   inflightPromise = (async () => {
     try {
-      const [courseSnap, branchSnap, cmsSnap, projSnap, specialProg] = await Promise.all([
-        getDocs(query(collection(db, 'courses'), where('status', '==', 'published'), limit(100))),
-        getDocs(query(collection(db, 'branches'), where('status', '==', 'active'), limit(30))),
-        getDocs(query(collection(db, 'cmsItems'), where('status', '==', 'published'), limit(60))),
-        getDocs(
-          query(collection(db, 'communityPosts'), where('moderatedStatus', '==', 'active'), limit(30))
-        ),
-        getSpecialProgrammeBySlug('free-skill-development'),
-      ]);
+      const [courseSnap, branchSnap, cmsSnap, projSnap, specialProg, publishedPosterSnap, brandSnap] =
+        await Promise.all([
+          getDocs(query(collection(db, 'courses'), where('status', '==', 'published'), limit(100))),
+          getDocs(query(collection(db, 'branches'), where('status', '==', 'active'), limit(30))),
+          getDocs(query(collection(db, 'cmsItems'), where('status', '==', 'published'), limit(60))),
+          getDocs(
+            query(collection(db, 'communityPosts'), where('moderatedStatus', '==', 'active'), limit(30))
+          ),
+          getSpecialProgrammeBySlug('free-skill-development'),
+          getDocs(
+            query(collection(db, 'generatedPosters'), where('status', '==', 'published'), limit(40))
+          ).catch(() => null),
+          getDoc(doc(db, 'brandSettings', INSTITUTE_INFO.institutionId)).catch(() => null),
+        ]);
 
       const courses: Course[] = !courseSnap.empty
         ? courseSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Course, 'id'>) }))
@@ -107,12 +129,27 @@ export async function fetchPublicCatalogOptimized(forceRefresh = false): Promise
             .filter((p) => p.postType === 'Project Showcase')
         : [];
 
+      const publishedPosters: GeneratedPoster[] =
+        publishedPosterSnap && !publishedPosterSnap.empty
+          ? publishedPosterSnap.docs
+              .map((d) => ({ id: d.id, ...(d.data() as Omit<GeneratedPoster, 'id'>) }))
+              .filter((p) => p.status === 'published')
+              .sort((a, b) => (b.publishedAt || b.updatedAt || '').localeCompare(a.publishedAt || a.updatedAt || ''))
+          : [];
+
+      const brandSettings: BrandSettings =
+        brandSnap && brandSnap.exists()
+          ? (brandSnap.data() as BrandSettings)
+          : DEFAULT_BRAND_SETTINGS;
+
       const payload: PublicCatalogPayload = {
         courses,
         branches,
         cmsItems,
         showcasePosts,
         specialProgramme: specialProg || DEFAULT_FREE_SKILL_PROGRAMME,
+        publishedPosters,
+        brandSettings,
         fetchedAt: Date.now(),
       };
 
@@ -126,6 +163,8 @@ export async function fetchPublicCatalogOptimized(forceRefresh = false): Promise
         cmsItems: SEED_CMS_ITEMS,
         showcasePosts: [],
         specialProgramme: DEFAULT_FREE_SKILL_PROGRAMME,
+        publishedPosters: [],
+        brandSettings: DEFAULT_BRAND_SETTINGS,
         fetchedAt: Date.now(),
       };
       return fallback;

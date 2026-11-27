@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { auth, db } from '../../lib/firebase';
 import { formatLkr, logAuditEvent, makeSafeId } from '../../lib/firestoreService';
 import { INSTITUTE_INFO } from '../../data/catalogSeed';
 import {
@@ -243,9 +243,14 @@ export const OperationsFinanceCerts: React.FC<OpsProps> = ({
     setAiExamLoading(true);
     setNotice(null);
     try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Please sign in again to use AI Exam Assistant.');
       const res = await fetch('/api/ai/exam-assistant', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           action: 'generate_mcq',
           courseName: course.name,

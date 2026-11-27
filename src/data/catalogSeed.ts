@@ -1,13 +1,24 @@
-import { Branch, CmsItem, Course, RolePermissionConfig, SpecialProgramme, SystemSettings, UserRole } from '../types/lms';
+import {
+  AutomationWorkflow,
+  Branch,
+  BrandSettings,
+  CmsItem,
+  Course,
+  IntegrationConfig,
+  RolePermissionConfig,
+  SpecialProgramme,
+  SystemSettings,
+  UserRole,
+} from '../types/lms';
 
 export const INSTITUTE_INFO = {
   officialName: 'TECHMAN COLLEGE',
-  platformName: 'TECHMAN COLLEGE LMS',
+  platformName: 'TECHMAN COLLEGE ONLINE',
   establishedYear: '2021',
   establishedLabel: 'Established in 2021',
   institutionId: 'techman-ai-lk',
-  website: 'https://techmemai.lk',
-  publicEmail: 'info@techmemai.lk',
+  website: 'https://techmancollege.online',
+  publicEmail: 'info@techmancollege.online',
   phone: '+94 710 108 803',
   whatsappDigits: '94710108803',
   country: 'Sri Lanka',
@@ -26,7 +37,8 @@ export const INSTITUTE_INFO = {
 };
 
 export const BRAND_IMAGES = {
-  officialLogo: '/assets/opt/logo_techman_college.webp',
+  officialLogo: '/assets/aistudio/TECHMAN_COLLEGE_Logo_2ded40b0.png',
+  officialLogoLegacy: '/assets/opt/logo_techman_college.webp',
   heroFuturisticAi: '/assets/opt/hero_futuristic_ai.webp',
   card3dRoboticsStem: '/assets/opt/card_3d_robotics_stem.webp',
   careerInnovationCenter: '/assets/opt/career_innovation_center.webp',
@@ -55,6 +67,20 @@ export const BRAND_IMAGES = {
   founderPhotoCutout: '/assets/opt/founder_hero_cutout.webp',
   founderPhotoCutoutMobile: '/assets/opt/founder_hero_cutout_mobile.webp',
   trainerMohammedRashadh: '/assets/opt/founder_profile_original.webp',
+  // Uploaded Official 2026/2027 TECHMAN Showcase Posters & AI First Class Deck
+  posterUploadedWebApp: '/assets/aistudio/74e41ca3-1def-4cf6-a48f-3cbdcc903d75_baf9414e.png',
+  posterUploadedGraphicAI: '/assets/aistudio/354ef4ab-a919-4f15-b046-8cb01a9cd203_269ca448.png',
+  posterUploadedWebAppGreen: '/assets/aistudio/384c3027-5d88-4476-8c91-e75680faaf10_eee2d683.png',
+  posterUploadedWebAppPurple: '/assets/aistudio/9cb94ca1-566b-4616-8e73-2203617bc851_76ddd927.png',
+  posterUploadedCertGraphic: '/assets/aistudio/74dc5a2f-d68a-4154-aa70-715b210f6579_-_Copy_4502978f.png',
+  posterUploadedDigitalMktAI: '/assets/aistudio/ChatGPT_Image_Sep_8__2026__11_31_05_PM_919734fe.png',
+  posterUploadedDiplomaAI: '/assets/aistudio/d1cfb068-19aa-403f-887a-63a216582b29_e8c896e4.png',
+  posterUploadedDoubleSkills: '/assets/aistudio/d3359bae-d1c2-48bf-9d8c-dc7159e646a8_6134c37d.png',
+  posterUploadedPaidVsFree: '/assets/aistudio/fb05b940eb28af9c0a175270d0baa203_12d7bd90.jpg',
+  posterUploadedCanvaBundle1: '/assets/aistudio/95f42d39-3e23-4e1a-872b-41c21d9a4557_6556eff7.png',
+  posterUploadedCanvaBundle2: '/assets/aistudio/e6090a6e-6b56-4175-8b44-8aacbcb845f9_24f25cc0.png',
+  posterUploadedCanvaBundle3: '/assets/aistudio/c2dcac7e-f3df-4083-802b-fbd46a81d858_5de7fe62.png',
+  aiFirstClassPdf: '/assets/aistudio/AI_First_Class_-_No_Hype_Only_Reality_8465d6c3.pdf',
 };
 
 export interface CampusGalleryItem {
@@ -202,6 +228,51 @@ export const OFFICIAL_POSTERS: OfficialPoster[] = [
     imageUrl: BRAND_IMAGES.posterFreeGraphicDesign,
     courseId: 'cert-graphic-design',
     highlights: 'Canva · ChatGPT · Cloud AI · Adobe Photoshop Basic · Adobe Illustrator Basic',
+  },
+  {
+    id: 'poster-diploma-ai-flagship',
+    title: 'Diploma in Artificial Intelligence — Build Your Future with AI',
+    subtitle: 'AI · Automation · Generative AI · Hands-on Projects & Global Careers',
+    category: 'Diploma',
+    imageUrl: BRAND_IMAGES.posterUploadedDiplomaAI,
+    courseId: 'dip-intl-ai',
+    highlights: 'AI Fundamentals · Prompt Engineering · AI Automation (n8n/Make) · AI Agents',
+  },
+  {
+    id: 'poster-diploma-graphic-ai',
+    title: 'Diploma in Graphic Design with AI — 6 Months',
+    subtitle: 'Canva · Adobe Photoshop · Adobe Illustrator · AI Design Tools',
+    category: 'Diploma',
+    imageUrl: BRAND_IMAGES.posterUploadedGraphicAI,
+    courseId: 'dip-intl-graphic-design',
+    highlights: 'Poster Design · Logo & Branding · Social Media · Portfolio & Freelancing',
+  },
+  {
+    id: 'poster-diploma-web-app-ai',
+    title: 'AI-Powered Advanced Web & App Development',
+    subtitle: '6 Month Program · Build Websites & Apps Without Coding + Modern Stack',
+    category: 'Diploma',
+    imageUrl: BRAND_IMAGES.posterUploadedWebApp,
+    courseId: 'dip-intl-web-design-dev',
+    highlights: 'WordPress · Framer · Webflow · FlutterFlow · Bolt · ChatGPT · Claude · Gemini',
+  },
+  {
+    id: 'poster-diploma-digital-mkt-ai',
+    title: 'Diploma in Digital Marketing & Content Creation with AI',
+    subtitle: '100% Online · Bilingual Support · Paid Ads, SEO & Reels Mastery',
+    category: 'Diploma',
+    imageUrl: BRAND_IMAGES.posterUploadedDigitalMktAI,
+    courseId: 'dip-intl-digital-marketing',
+    highlights: 'Digital Marketing · Content Creation · Meta/Google Ads · Copywriting · Analytics',
+  },
+  {
+    id: 'poster-double-skills-promo',
+    title: 'Double Your Skills — Graphic Design + Digital Marketing with AI',
+    subtitle: 'Live + Recorded Sessions · Practical Projects · Certificates for Both Tracks',
+    category: 'Campaign',
+    imageUrl: BRAND_IMAGES.posterUploadedDoubleSkills,
+    courseId: 'dip-intl-graphic-design',
+    highlights: 'Design Fundamentals · Adobe Suite · Social Media Marketing · AI Automation',
   },
 ];
 
@@ -430,13 +501,22 @@ export const DOMAIN_SYLLABI: Record<string, string[]> = {
 };
 
 function imageForDomain(domain: string): string {
-  if (domain === 'Graphic Design' || domain === 'Video Editing' || domain === 'Digital Marketing') {
+  if (domain === 'Digital Marketing & Creative Media' || domain === 'Graphic Design' || domain === 'Video Editing' || domain === 'Digital Marketing') {
     return BRAND_IMAGES.creativeDesign;
   }
-  if (domain === 'Artificial Intelligence' || domain === 'Web Development' || domain === 'Information Technology') {
+  if (domain === 'IT & Technology' || domain === 'Artificial Intelligence' || domain === 'Web Development' || domain === 'Information Technology') {
     return BRAND_IMAGES.aiEngineering;
   }
   return BRAND_IMAGES.graduationCert;
+}
+
+function makeCourseSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 140);
 }
 
 interface RawCourseSeed {
@@ -444,81 +524,941 @@ interface RawCourseSeed {
   code: string;
   name: string;
   category: 'Certificate' | 'Diploma';
-  domain: string;
+  domain:
+    | 'IT & Technology'
+    | 'Digital Marketing & Creative Media'
+    | 'Business & Management'
+    | 'Psychology'
+    | 'Arabic & Islamic Studies';
+  syllabusKey: keyof typeof DOMAIN_SYLLABI;
   duration: string;
   mode: 'Online' | 'Physical' | 'Hybrid';
   courseFeeLkr: number;
-  registrationFeeLkr: number;
-  certificateFeeLkr: number;
+  feeConfigured: boolean;
+  isFree?: boolean;
+  registrationFeeLkr?: number;
+  certificateFeeLkr?: number;
   description: string;
+  imageUrl?: string;
+  featured?: boolean;
+  customSyllabus?: string[];
 }
 
-const RAW_32_COURSES: (RawCourseSeed & { imageUrl?: string; customSyllabus?: string[] })[] = [
-  // A. 16 Certificate Level Courses (First 5 are 100% Free Courses per Official 2027 Intake Poster)
-  { id: 'cert-graphic-design', code: 'TM-CGD-27', name: 'Certificate in Graphic Design', category: 'Certificate', domain: 'Graphic Design', duration: '3 Months', mode: 'Hybrid', courseFeeLkr: 0, registrationFeeLkr: 2000, certificateFeeLkr: 3000, imageUrl: BRAND_IMAGES.posterFreeGraphicDesign, description: '100% Free Certificate Course (ABE Endorsed). Master Canva, ChatGPT, Cloud AI, Adobe Photoshop Basic, and Adobe Illustrator Basic in 3 months (Online & Offline).' },
-  { id: 'cert-information-technology', code: 'TM-CIT-27', name: 'Certificate in Information Technology', category: 'Certificate', domain: 'Information Technology', duration: '3 Months', mode: 'Hybrid', courseFeeLkr: 0, registrationFeeLkr: 2000, certificateFeeLkr: 3000, description: '100% Free Certificate Course. Essential computing, cloud office suites, cybersecurity basics, and AI-assisted workplace productivity.' },
-  { id: 'cert-canva-design', code: 'TM-CCD-27', name: 'Certificate in Canva Design', category: 'Certificate', domain: 'Graphic Design', duration: '3 Months', mode: 'Online', courseFeeLkr: 0, registrationFeeLkr: 2000, certificateFeeLkr: 3000, description: '100% Free Certificate Course. Rapid commercial design using Canva Pro and Canva AI for social media kits, pitch decks, and print templates.' },
-  { id: 'cert-content-creation', code: 'TM-CCC-27', name: 'Certificate in Content Creation', category: 'Certificate', domain: 'Video Editing', duration: '3 Months', mode: 'Online', courseFeeLkr: 0, registrationFeeLkr: 2000, certificateFeeLkr: 3000, description: '100% Free Certificate Course. End-to-end creator training covering scripting, CapCut editing, AI visuals, and audience monetization.' },
-  { id: 'cert-social-media-marketing', code: 'TM-CSM-27', name: 'Certificate in Social Media Marketing', category: 'Certificate', domain: 'Digital Marketing', duration: '3 Months', mode: 'Online', courseFeeLkr: 0, registrationFeeLkr: 2000, certificateFeeLkr: 3000, description: '100% Free Certificate Course. Practical Facebook, Instagram, TikTok, and WhatsApp Business growth strategies with paid Meta Ads fundamentals.' },
-  { id: 'cert-business-management', code: 'TM-CBM-27', name: 'Certificate in Business Management', category: 'Certificate', domain: 'Business & Management', duration: '4 Months', mode: 'Hybrid', courseFeeLkr: 30000, registrationFeeLkr: 3000, certificateFeeLkr: 3000, description: 'Core management principles, financial planning, operations, and entrepreneurship for Sri Lankan and regional businesses.' },
-  { id: 'cert-hrm', code: 'TM-CHR-27', name: 'Certificate in Human Resource Management', category: 'Certificate', domain: 'Business & Management', duration: '4 Months', mode: 'Hybrid', courseFeeLkr: 30000, registrationFeeLkr: 3000, certificateFeeLkr: 3000, description: 'Talent acquisition, employee relations, payroll compliance basics, and modern HR analytics.' },
-  { id: 'cert-ecommerce', code: 'TM-CEC-27', name: 'Certificate in E-Commerce', category: 'Certificate', domain: 'Business & Management', duration: '3 Months', mode: 'Online', courseFeeLkr: 27000, registrationFeeLkr: 3000, certificateFeeLkr: 3000, description: 'Launch, optimize, and scale online retail stores with payment gateways, logistics, and digital customer retention.' },
-  { id: 'cert-general-psychology', code: 'TM-CGP-27', name: 'Certificate in General Psychology', category: 'Certificate', domain: 'Psychology', duration: '4 Months', mode: 'Hybrid', courseFeeLkr: 32000, registrationFeeLkr: 3000, certificateFeeLkr: 3000, description: 'Foundational exploration of human cognition, behavior, motivation, and everyday interpersonal psychology.' },
-  { id: 'cert-arabic-language', code: 'TM-CAL-27', name: 'Certificate in Arabic Language', category: 'Certificate', domain: 'Arabic & Islamic Studies', duration: '4 Months', mode: 'Online', courseFeeLkr: 22000, registrationFeeLkr: 2500, certificateFeeLkr: 2500, description: 'Structured reading, writing, vocabulary, and foundational Modern Standard Arabic grammar.' },
-  { id: 'cert-arabic-speaking', code: 'TM-CAS-27', name: 'Certificate in Arabic Speaking', category: 'Certificate', domain: 'Arabic & Islamic Studies', duration: '3 Months', mode: 'Online', courseFeeLkr: 20000, registrationFeeLkr: 2500, certificateFeeLkr: 2500, description: 'Interactive spoken Arabic sessions designed for daily conversation, travel, and Middle East career readiness.' },
-  { id: 'cert-quran-reading', code: 'TM-CQR-27', name: 'Certificate in Quran Reading', category: 'Certificate', domain: 'Arabic & Islamic Studies', duration: '4 Months', mode: 'Online', courseFeeLkr: 16000, registrationFeeLkr: 2000, certificateFeeLkr: 2000, description: 'Guided step-by-step Quranic recitation fluency with personalized instructor recitation checks.' },
-  { id: 'cert-tajweed', code: 'TM-CTJ-27', name: 'Certificate in Tajweed', category: 'Certificate', domain: 'Arabic & Islamic Studies', duration: '4 Months', mode: 'Online', courseFeeLkr: 18000, registrationFeeLkr: 2000, certificateFeeLkr: 2000, description: 'Accurate articulation points (Makharij), characteristics of letters, and applied Tajweed recitation practice.' },
-  { id: 'cert-islamic-studies', code: 'TM-CIS-27', name: 'Certificate in Islamic Studies', category: 'Certificate', domain: 'Arabic & Islamic Studies', duration: '4 Months', mode: 'Online', courseFeeLkr: 20000, registrationFeeLkr: 2500, certificateFeeLkr: 2500, description: 'Comprehensive foundations in Aqeedah, Fiqh, Seerah, and contemporary Islamic ethics.' },
-  { id: 'cert-quranic-arabic', code: 'TM-CQA-27', name: 'Certificate in Quranic Arabic', category: 'Certificate', domain: 'Arabic & Islamic Studies', duration: '4 Months', mode: 'Online', courseFeeLkr: 22000, registrationFeeLkr: 2500, certificateFeeLkr: 2500, description: 'Understand Quranic vocabulary, morphology (Sarf), and sentence structure (Nahw) directly from text.' },
-  { id: 'cert-web-dev-design', code: 'TM-CWD-27', name: 'Certificate in Web Development & Web Design', category: 'Certificate', domain: 'Web Development', duration: '4 Months', mode: 'Hybrid', courseFeeLkr: 34000, registrationFeeLkr: 3000, certificateFeeLkr: 3000, description: 'Build responsive modern websites with HTML, CSS, JavaScript, WordPress, AI site builders, and live cloud deployment.' },
+export const COURSE_SUBJECT_DOMAINS = [
+  'IT & Technology',
+  'Digital Marketing & Creative Media',
+  'Business & Management',
+  'Psychology',
+  'Arabic & Islamic Studies',
+] as const;
 
-  // B. 16 Diploma Level Courses (Official 2027 Intake Fees Synced from TECHMAN Posters)
-  { id: 'dip-intl-graphic-design', code: 'TM-DGD-27', name: 'International Diploma in Graphic Design', category: 'Diploma', domain: 'Graphic Design', duration: '6 Months', mode: 'Hybrid', courseFeeLkr: 58000, registrationFeeLkr: 3000, certificateFeeLkr: 4000, description: 'Industry-grade creative suite mastery across Adobe Photoshop, Illustrator, CorelDRAW, Canva AI, packaging, and agency portfolio creation.' },
-  { id: 'dip-intl-web-design-dev', code: 'TM-DWD-27', name: 'International Diploma in Web Design & Development', category: 'Diploma', domain: 'Web Development', duration: '6 Months', mode: 'Hybrid', courseFeeLkr: 35000, registrationFeeLkr: 3000, certificateFeeLkr: 4500, description: 'Full-stack web engineering covering React, Node.js, APIs, Firebase, SQL, Git/GitHub, AI-accelerated development, and live client capstone delivery.' },
-  { id: 'dip-intl-digital-marketing', code: 'TM-DDM-27', name: 'International Diploma in Business & Digital Marketing', category: 'Diploma', domain: 'Digital Marketing', duration: '6 Months', mode: 'Hybrid', courseFeeLkr: 30000, registrationFeeLkr: 3000, certificateFeeLkr: 4000, imageUrl: BRAND_IMAGES.posterDiplomaBusinessMarketing, description: 'TECHMAN COLLEGE Independent International Diploma (Online & Offline). Master Business Strategy, Meta Ads, Google Ads, SEO, Analytics, WhatsApp CRM, and full-funnel growth campaigns.' },
-  { id: 'dip-intl-it', code: 'TM-DIT-27', name: 'Diploma in IT & Software Development', category: 'Diploma', domain: 'Information Technology', duration: '6 Months', mode: 'Hybrid', courseFeeLkr: 35000, registrationFeeLkr: 3000, certificateFeeLkr: 4500, imageUrl: BRAND_IMAGES.posterDiplomaIT, description: 'Professional Diploma Programme (CPD Approved · Online & Offline). Both Coding & Non-Coding tracks covering Web, React/Node.js, Flutter Basics, Firebase/SQL, WordPress/Wix, and Cloud Deployment.', customSyllabus: ['Web Development (HTML, CSS, JS)', 'Modern Development (React / Node.js)', 'App Development (Flutter Basics)', 'Database & Backend (Firebase / SQL)', 'No-Code Development (WordPress / Wix)', 'IT Tools & Productivity', 'Cloud & Deployment (Hosting, Git, GitHub)', 'Project Development & Portfolio'] },
-  { id: 'dip-intl-ai', code: 'TM-DAI-27', name: 'International Diploma in Artificial Intelligence', category: 'Diploma', domain: 'Artificial Intelligence', duration: '8 Months', mode: 'Hybrid', courseFeeLkr: 85000, registrationFeeLkr: 5000, certificateFeeLkr: 5000, description: 'Flagship 2027 programme covering Generative AI, ChatGPT, Gemini, Claude, multimodal production, AI agents, and applied enterprise builds.' },
-  { id: 'dip-intl-prompt-eng', code: 'TM-DPE-27', name: 'International Diploma in Prompt Engineering', category: 'Diploma', domain: 'Artificial Intelligence', duration: '6 Months', mode: 'Online', courseFeeLkr: 68000, registrationFeeLkr: 3000, certificateFeeLkr: 4500, description: 'Systematic prompt architecture, structured outputs, evaluation frameworks, and multi-model orchestration for business and engineering.' },
-  { id: 'dip-intl-ai-automation', code: 'TM-DAA-27', name: 'International Diploma in AI Automation', category: 'Diploma', domain: 'Artificial Intelligence', duration: '6 Months', mode: 'Online', courseFeeLkr: 74000, registrationFeeLkr: 3000, certificateFeeLkr: 4500, description: 'Build autonomous business workflows, no-code AI pipelines, CRM agents, and automated client delivery systems.' },
-  { id: 'dip-intl-video-editing', code: 'TM-DVE-27', name: 'International Diploma in Video Editing & Content Creation', category: 'Diploma', domain: 'Video Editing', duration: '6 Months', mode: 'Hybrid', courseFeeLkr: 56000, registrationFeeLkr: 3000, certificateFeeLkr: 4000, description: 'Commercial video production with CapCut Pro, AI video synthesis, motion graphics, sound design, and multi-channel publishing.' },
-  { id: 'dip-intl-business-mgmt', code: 'TM-DBM-27', name: 'International Diploma in Business Management', category: 'Diploma', domain: 'Business & Management', duration: '6 Months', mode: 'Hybrid', courseFeeLkr: 30000, registrationFeeLkr: 3000, certificateFeeLkr: 4500, imageUrl: BRAND_IMAGES.posterDiplomaBusinessMarketing, description: 'Strategic leadership, managerial finance, marketing operations, and digital transformation for modern executives.' },
-  { id: 'dip-intl-hrm', code: 'TM-DHR-27', name: 'International Diploma in Human Resource Management', category: 'Diploma', domain: 'Business & Management', duration: '8 Months', mode: 'Hybrid', courseFeeLkr: 66000, registrationFeeLkr: 3000, certificateFeeLkr: 4500, description: 'Strategic workforce planning, performance systems, Sri Lankan labor law awareness, and people analytics.' },
-  { id: 'dip-intl-ecommerce', code: 'TM-DEC-27', name: 'International Diploma in E-Commerce', category: 'Diploma', domain: 'Business & Management', duration: '6 Months', mode: 'Online', courseFeeLkr: 60000, registrationFeeLkr: 3000, certificateFeeLkr: 4000, description: 'Cross-border e-commerce architecture, conversion optimization, marketplace scaling, and AI-assisted merchandising.' },
-  { id: 'dip-intl-psychology', code: 'TM-DPS-27', name: 'International Diploma in Psychology', category: 'Diploma', domain: 'Psychology', duration: '8 Months', mode: 'Hybrid', courseFeeLkr: 70000, registrationFeeLkr: 3000, certificateFeeLkr: 4500, description: 'In-depth cognitive, developmental, organizational, and applied counseling foundations with structured case studies.' },
-  { id: 'dip-arabic-language', code: 'TM-DAL-27', name: 'Diploma in Arabic Language', category: 'Diploma', domain: 'Arabic & Islamic Studies', duration: '10 Months', mode: 'Online', courseFeeLkr: 48000, registrationFeeLkr: 3000, certificateFeeLkr: 3500, description: 'Advanced Arabic linguistics, fluent conversation, classical/modern reading comprehension, and translation skills.' },
-  { id: 'dip-islamic-studies', code: 'TM-DIS-27', name: 'Diploma in Islamic Studies', category: 'Diploma', domain: 'Arabic & Islamic Studies', duration: '10 Months', mode: 'Online', courseFeeLkr: 48000, registrationFeeLkr: 3000, certificateFeeLkr: 3500, description: 'Structured multi-discipline Islamic scholarship covering Tafsir, Hadith principles, Fiqh, and Islamic civilization.' },
-  { id: 'dip-advanced-tajweed', code: 'TM-DAT-27', name: 'Advanced Tajweed Programme', category: 'Diploma', domain: 'Arabic & Islamic Studies', duration: '8 Months', mode: 'Online', courseFeeLkr: 42000, registrationFeeLkr: 3000, certificateFeeLkr: 3000, description: 'Mastery-level Tajweed theory and intensive oral recitation refinement under qualified teachers.' },
-  { id: 'dip-hifz-ul-quran', code: 'TM-DHQ-27', name: 'Hifz-ul-Quran Programme', category: 'Diploma', domain: 'Arabic & Islamic Studies', duration: '12–24 Months', mode: 'Hybrid', courseFeeLkr: 54000, registrationFeeLkr: 3000, certificateFeeLkr: 3500, description: 'Structured Quran memorization track with daily Sabaq, Sabqi, and Manzil milestones and personalized revision schedules.' },
+// EXACTLY 40 UNIQUE 2027 COURSES: 22 Certificate (5 marked FREE, zero duplicates) + 18 Diploma
+const RAW_40_COURSES: RawCourseSeed[] = [
+  // =========================================================================
+  // A. CERTIFICATE LEVEL — 22 COURSES
+  // =========================================================================
+
+  // IT & Technology (8)
+  {
+    id: 'cert-graphic-design',
+    code: 'TM-CGD-27',
+    name: 'Certificate in Graphic Design',
+    category: 'Certificate',
+    domain: 'IT & Technology',
+    syllabusKey: 'Graphic Design',
+    duration: '3 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 0,
+    feeConfigured: true,
+    isFree: true,
+    registrationFeeLkr: 2000,
+    certificateFeeLkr: 3000,
+    imageUrl: BRAND_IMAGES.posterFreeGraphicDesign,
+    featured: true,
+    description:
+      '100% Free Certificate Course (2027 Intake). Master Canva, ChatGPT, Cloud AI, Adobe Photoshop basics, and Adobe Illustrator basics with practical portfolio projects.',
+  },
+  {
+    id: 'cert-web-dev-design',
+    code: 'TM-CWD-27',
+    name: 'Certificate in Web Design',
+    category: 'Certificate',
+    domain: 'IT & Technology',
+    syllabusKey: 'Web Development',
+    duration: '4 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 34000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 3000,
+    description:
+      'Build responsive modern websites with HTML5, CSS3, JavaScript fundamentals, WordPress, no-code AI web builders, and live cloud publishing.',
+  },
+  {
+    id: 'cert-information-technology',
+    code: 'TM-CIT-27',
+    name: 'Certificate in Information Technology',
+    category: 'Certificate',
+    domain: 'IT & Technology',
+    syllabusKey: 'Information Technology',
+    duration: '3 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 0,
+    feeConfigured: true,
+    isFree: true,
+    registrationFeeLkr: 2000,
+    certificateFeeLkr: 3000,
+    featured: true,
+    description:
+      '100% Free Certificate Course. Essential computing, cloud office suites, cybersecurity basics, and AI-assisted workplace productivity.',
+  },
+  {
+    id: 'cert-artificial-intelligence',
+    code: 'TM-CAI-27',
+    name: 'Certificate in Artificial Intelligence',
+    category: 'Certificate',
+    domain: 'IT & Technology',
+    syllabusKey: 'Artificial Intelligence',
+    duration: 'To be configured by Admin',
+    mode: 'Hybrid',
+    courseFeeLkr: 0,
+    feeConfigured: false,
+    featured: true,
+    imageUrl: BRAND_IMAGES.posterUploadedDiplomaAI,
+    description:
+      'Practical foundation in Artificial Intelligence: real-world AI concepts, Generative AI tools, ethical usage, and workplace productivity workflows.',
+  },
+  {
+    id: 'cert-prompt-engineering',
+    code: 'TM-CPE-27',
+    name: 'Certificate in Prompt Engineering',
+    category: 'Certificate',
+    domain: 'IT & Technology',
+    syllabusKey: 'Artificial Intelligence',
+    duration: 'To be configured by Admin',
+    mode: 'Online',
+    courseFeeLkr: 0,
+    feeConfigured: false,
+    description:
+      'Structured prompt design, logical instruction frameworks, multi-model prompting (ChatGPT, Gemini, Claude), and applied productivity workflows.',
+  },
+  {
+    id: 'cert-ai-automation',
+    code: 'TM-CAA-27',
+    name: 'Certificate in AI Automation',
+    category: 'Certificate',
+    domain: 'IT & Technology',
+    syllabusKey: 'Artificial Intelligence',
+    duration: 'To be configured by Admin',
+    mode: 'Online',
+    courseFeeLkr: 0,
+    feeConfigured: false,
+    description:
+      'No-code AI workflow automation fundamentals for business operations, document pipelines, and customer communication workflows.',
+  },
+  {
+    id: 'cert-video-editing',
+    code: 'TM-CVE-27',
+    name: 'Certificate in Video Editing',
+    category: 'Certificate',
+    domain: 'IT & Technology',
+    syllabusKey: 'Video Editing',
+    duration: 'To be configured by Admin',
+    mode: 'Hybrid',
+    courseFeeLkr: 0,
+    feeConfigured: false,
+    description:
+      'Hands-on video editing essentials covering CapCut Pro, timeline storytelling, audio cleanup, short-form Reels editing, and multi-platform exports.',
+  },
+  {
+    id: 'cert-canva-design',
+    code: 'TM-CCD-27',
+    name: 'Certificate in Canva Design',
+    category: 'Certificate',
+    domain: 'IT & Technology',
+    syllabusKey: 'Graphic Design',
+    duration: '3 Months',
+    mode: 'Online',
+    courseFeeLkr: 0,
+    feeConfigured: true,
+    isFree: true,
+    registrationFeeLkr: 2000,
+    certificateFeeLkr: 3000,
+    featured: true,
+    description:
+      '100% Free Certificate Course. Commercial visual design using Canva and Canva AI for social media kits, pitch decks, and print templates.',
+  },
+
+  // Digital Marketing & Creative Media (4)
+  {
+    id: 'cert-digital-marketing',
+    code: 'TM-CDM-27',
+    name: 'Certificate in Digital Marketing',
+    category: 'Certificate',
+    domain: 'Digital Marketing & Creative Media',
+    syllabusKey: 'Digital Marketing',
+    duration: 'To be configured by Admin',
+    mode: 'Hybrid',
+    courseFeeLkr: 0,
+    feeConfigured: false,
+    description:
+      'Practical digital marketing foundations covering content strategy, paid social campaigns, SEO essentials, analytics, and customer funnels.',
+  },
+  {
+    id: 'cert-social-media-marketing',
+    code: 'TM-CSM-27',
+    name: 'Certificate in Social Media Marketing',
+    category: 'Certificate',
+    domain: 'Digital Marketing & Creative Media',
+    syllabusKey: 'Digital Marketing',
+    duration: '3 Months',
+    mode: 'Online',
+    courseFeeLkr: 0,
+    feeConfigured: true,
+    isFree: true,
+    registrationFeeLkr: 2000,
+    certificateFeeLkr: 3000,
+    featured: true,
+    description:
+      '100% Free Certificate Course. Practical Facebook, Instagram, TikTok, and WhatsApp Business growth strategies with Meta Ads fundamentals.',
+  },
+  {
+    id: 'cert-content-creation',
+    code: 'TM-CCC-27',
+    name: 'Certificate in Content Creation',
+    category: 'Certificate',
+    domain: 'Digital Marketing & Creative Media',
+    syllabusKey: 'Video Editing',
+    duration: '3 Months',
+    mode: 'Online',
+    courseFeeLkr: 0,
+    feeConfigured: true,
+    isFree: true,
+    registrationFeeLkr: 2000,
+    certificateFeeLkr: 3000,
+    featured: true,
+    description:
+      '100% Free Certificate Course. End-to-end creator training covering scripting, CapCut editing, AI visual storytelling, and digital audience building.',
+  },
+  {
+    id: 'cert-personal-branding',
+    code: 'TM-CPB-27',
+    name: 'Certificate in Personal Branding',
+    category: 'Certificate',
+    domain: 'Digital Marketing & Creative Media',
+    syllabusKey: 'Digital Marketing',
+    duration: 'To be configured by Admin',
+    mode: 'Online',
+    courseFeeLkr: 0,
+    feeConfigured: false,
+    description:
+      'Build a credible professional identity across LinkedIn, social media, digital portfolios, and public communication for career and freelance growth.',
+  },
+
+  // Business & Management (3)
+  {
+    id: 'cert-business-management',
+    code: 'TM-CBM-27',
+    name: 'Certificate in Business Management',
+    category: 'Certificate',
+    domain: 'Business & Management',
+    syllabusKey: 'Business & Management',
+    duration: '4 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 30000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 3000,
+    description:
+      'Core management principles, financial planning, operations, and entrepreneurship for Sri Lankan and regional businesses.',
+  },
+  {
+    id: 'cert-hrm',
+    code: 'TM-CHR-27',
+    name: 'Certificate in Human Resource Management (HRM)',
+    category: 'Certificate',
+    domain: 'Business & Management',
+    syllabusKey: 'Business & Management',
+    duration: '4 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 30000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 3000,
+    description:
+      'Talent acquisition, employee relations, workplace policy basics, and modern HR analytics.',
+  },
+  {
+    id: 'cert-ecommerce',
+    code: 'TM-CEC-27',
+    name: 'Certificate in E-Commerce',
+    category: 'Certificate',
+    domain: 'Business & Management',
+    syllabusKey: 'Business & Management',
+    duration: '3 Months',
+    mode: 'Online',
+    courseFeeLkr: 27000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 3000,
+    description:
+      'Launch, optimize, and scale online retail stores with payment gateways, logistics, and digital customer retention.',
+  },
+
+  // Psychology (1)
+  {
+    id: 'cert-general-psychology',
+    code: 'TM-CGP-27',
+    name: 'Certificate in General Psychology',
+    category: 'Certificate',
+    domain: 'Psychology',
+    syllabusKey: 'Psychology',
+    duration: '4 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 32000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 3000,
+    description:
+      'Foundational exploration of human cognition, behavior, motivation, emotional intelligence, and everyday interpersonal psychology.',
+  },
+
+  // Arabic & Islamic Studies (6)
+  {
+    id: 'cert-arabic-language',
+    code: 'TM-CAL-27',
+    name: 'Certificate in Arabic Language',
+    category: 'Certificate',
+    domain: 'Arabic & Islamic Studies',
+    syllabusKey: 'Arabic & Islamic Studies',
+    duration: '4 Months',
+    mode: 'Online',
+    courseFeeLkr: 22000,
+    feeConfigured: true,
+    registrationFeeLkr: 2500,
+    certificateFeeLkr: 2500,
+    description:
+      'Structured reading, writing, vocabulary, and foundational Modern Standard Arabic grammar.',
+  },
+  {
+    id: 'cert-arabic-speaking',
+    code: 'TM-CAS-27',
+    name: 'Certificate in Arabic Speaking',
+    category: 'Certificate',
+    domain: 'Arabic & Islamic Studies',
+    syllabusKey: 'Arabic & Islamic Studies',
+    duration: '3 Months',
+    mode: 'Online',
+    courseFeeLkr: 20000,
+    feeConfigured: true,
+    registrationFeeLkr: 2500,
+    certificateFeeLkr: 2500,
+    description:
+      'Interactive spoken Arabic sessions designed for daily conversation, travel, and Middle East career readiness.',
+  },
+  {
+    id: 'cert-quran-reading',
+    code: 'TM-CQR-27',
+    name: "Certificate in Qur'an Reading",
+    category: 'Certificate',
+    domain: 'Arabic & Islamic Studies',
+    syllabusKey: 'Arabic & Islamic Studies',
+    duration: '4 Months',
+    mode: 'Online',
+    courseFeeLkr: 16000,
+    feeConfigured: true,
+    registrationFeeLkr: 2000,
+    certificateFeeLkr: 2000,
+    description:
+      "Guided step-by-step Qur'anic recitation fluency with personalized instructor recitation checks.",
+  },
+  {
+    id: 'cert-tajweed',
+    code: 'TM-CTJ-27',
+    name: 'Certificate in Tajweed',
+    category: 'Certificate',
+    domain: 'Arabic & Islamic Studies',
+    syllabusKey: 'Arabic & Islamic Studies',
+    duration: '4 Months',
+    mode: 'Online',
+    courseFeeLkr: 18000,
+    feeConfigured: true,
+    registrationFeeLkr: 2000,
+    certificateFeeLkr: 2000,
+    description:
+      'Accurate articulation points (Makharij), characteristics of letters, and applied Tajweed recitation practice.',
+  },
+  {
+    id: 'cert-islamic-studies',
+    code: 'TM-CIS-27',
+    name: 'Certificate in Islamic Studies',
+    category: 'Certificate',
+    domain: 'Arabic & Islamic Studies',
+    syllabusKey: 'Arabic & Islamic Studies',
+    duration: '4 Months',
+    mode: 'Online',
+    courseFeeLkr: 20000,
+    feeConfigured: true,
+    registrationFeeLkr: 2500,
+    certificateFeeLkr: 2500,
+    description:
+      'Comprehensive foundations in Aqeedah, Fiqh, Seerah, and contemporary Islamic ethics.',
+  },
+  {
+    id: 'cert-quranic-arabic',
+    code: 'TM-CQA-27',
+    name: "Certificate in Qur'anic Arabic",
+    category: 'Certificate',
+    domain: 'Arabic & Islamic Studies',
+    syllabusKey: 'Arabic & Islamic Studies',
+    duration: '4 Months',
+    mode: 'Online',
+    courseFeeLkr: 22000,
+    feeConfigured: true,
+    registrationFeeLkr: 2500,
+    certificateFeeLkr: 2500,
+    description:
+      "Understand Qur'anic vocabulary, morphology (Sarf), and sentence structure (Nahw) directly from text.",
+  },
+
+  // =========================================================================
+  // B. DIPLOMA LEVEL — 18 COURSES
+  // =========================================================================
+
+  // IT & Technology (6)
+  {
+    id: 'dip-intl-graphic-design',
+    code: 'TM-DGD-27',
+    name: 'International Diploma in Graphic Design',
+    category: 'Diploma',
+    domain: 'IT & Technology',
+    syllabusKey: 'Graphic Design',
+    duration: '6 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 58000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 4000,
+    imageUrl: BRAND_IMAGES.posterUploadedGraphicAI,
+    featured: true,
+    description:
+      'Industry-grade creative suite mastery across Adobe Photoshop, Illustrator, CorelDRAW, Canva AI, packaging, and agency portfolio creation.',
+  },
+  {
+    id: 'dip-intl-web-design-dev',
+    code: 'TM-DWD-27',
+    name: 'International Diploma in Web Design & Development',
+    category: 'Diploma',
+    domain: 'IT & Technology',
+    syllabusKey: 'Web Development',
+    duration: '6 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 35000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 4500,
+    imageUrl: BRAND_IMAGES.posterUploadedWebApp,
+    featured: true,
+    description:
+      'Full-stack & AI-powered web engineering covering HTML/CSS/JS, React, Node.js, APIs, Firebase, SQL, WordPress/Framer, Git/GitHub, and live capstone builds.',
+  },
+  {
+    id: 'dip-intl-it',
+    code: 'TM-DIT-27',
+    name: 'International Diploma in Information Technology',
+    category: 'Diploma',
+    domain: 'IT & Technology',
+    syllabusKey: 'Information Technology',
+    duration: '6 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 35000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 4500,
+    imageUrl: BRAND_IMAGES.posterDiplomaIT,
+    featured: true,
+    description:
+      'Professional International Diploma in Information Technology covering modern systems, web & database foundations, cloud tools, no-code platforms, and portfolio projects.',
+    customSyllabus: [
+      'Web Development (HTML, CSS, JS)',
+      'Modern Development (React / Node.js)',
+      'App Development (Flutter Basics)',
+      'Database & Backend (Firebase / SQL)',
+      'No-Code Development (WordPress / Wix)',
+      'IT Tools & Productivity',
+      'Cloud & Deployment (Hosting, Git, GitHub)',
+      'Project Development & Portfolio',
+    ],
+  },
+  {
+    id: 'dip-intl-ai',
+    code: 'TM-DAI-27',
+    name: 'International Diploma in Artificial Intelligence',
+    category: 'Diploma',
+    domain: 'IT & Technology',
+    syllabusKey: 'Artificial Intelligence',
+    duration: '8 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 85000,
+    feeConfigured: true,
+    registrationFeeLkr: 5000,
+    certificateFeeLkr: 5000,
+    imageUrl: BRAND_IMAGES.posterUploadedDiplomaAI,
+    featured: true,
+    description:
+      'Flagship 2027 programme covering Generative AI, ChatGPT, Gemini, Claude, prompt engineering, multimodal production, AI agents, and applied enterprise builds.',
+  },
+  {
+    id: 'dip-intl-ai-automation',
+    code: 'TM-DAA-27',
+    name: 'International Diploma in AI Automation',
+    category: 'Diploma',
+    domain: 'IT & Technology',
+    syllabusKey: 'Artificial Intelligence',
+    duration: '6 Months',
+    mode: 'Online',
+    courseFeeLkr: 74000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 4500,
+    description:
+      'Build autonomous business workflows, no-code AI pipelines (Make/n8n), CRM agents, and automated client delivery systems.',
+  },
+  {
+    id: 'dip-intl-software-dev',
+    code: 'TM-DSD-27',
+    name: 'International Diploma in Software Development',
+    category: 'Diploma',
+    domain: 'IT & Technology',
+    syllabusKey: 'Web Development',
+    duration: 'To be configured by Admin',
+    mode: 'Hybrid',
+    courseFeeLkr: 0,
+    feeConfigured: false,
+    imageUrl: BRAND_IMAGES.posterUploadedWebAppGreen,
+    description:
+      'Comprehensive software engineering diploma covering programming logic, web & mobile application architecture, APIs, databases, testing, and cloud deployment.',
+  },
+
+  // Digital Marketing & Creative Media (4)
+  {
+    id: 'dip-intl-digital-marketing',
+    code: 'TM-DDM-27',
+    name: 'International Diploma in Digital Marketing',
+    category: 'Diploma',
+    domain: 'Digital Marketing & Creative Media',
+    syllabusKey: 'Digital Marketing',
+    duration: '6 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 30000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 4000,
+    imageUrl: BRAND_IMAGES.posterUploadedDigitalMktAI,
+    featured: true,
+    description:
+      'Master Digital Strategy, Meta Ads, Google Ads, SEO, Analytics, Copywriting, WhatsApp CRM, and full-funnel growth campaigns with AI tools.',
+  },
+  {
+    id: 'dip-intl-video-editing',
+    code: 'TM-DVE-27',
+    name: 'International Diploma in Video Editing & Content Creation',
+    category: 'Diploma',
+    domain: 'Digital Marketing & Creative Media',
+    syllabusKey: 'Video Editing',
+    duration: '6 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 56000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 4000,
+    description:
+      'Commercial video production with CapCut Pro, AI video synthesis, motion graphics, sound design, and multi-channel creator publishing.',
+  },
+  {
+    id: 'dip-intl-social-media-marketing',
+    code: 'TM-DSM-27',
+    name: 'International Diploma in Social Media Marketing',
+    category: 'Diploma',
+    domain: 'Digital Marketing & Creative Media',
+    syllabusKey: 'Digital Marketing',
+    duration: 'To be configured by Admin',
+    mode: 'Online',
+    courseFeeLkr: 0,
+    feeConfigured: false,
+    description:
+      'Advanced social media brand strategy, multi-platform content calendars, paid performance campaigns, community analytics, and agency reporting.',
+  },
+  {
+    id: 'dip-intl-freelancing',
+    code: 'TM-DFE-27',
+    name: 'International Diploma in Freelancing & Digital Entrepreneurship',
+    category: 'Diploma',
+    domain: 'Digital Marketing & Creative Media',
+    syllabusKey: 'Business & Management',
+    duration: 'To be configured by Admin',
+    mode: 'Online',
+    courseFeeLkr: 0,
+    feeConfigured: false,
+    description:
+      'Independent digital business building covering service positioning, international freelancing platforms, client proposals, pricing, and digital venture operations.',
+  },
+
+  // Business & Management (3)
+  {
+    id: 'dip-intl-business-mgmt',
+    code: 'TM-DBM-27',
+    name: 'International Diploma in Business Management',
+    category: 'Diploma',
+    domain: 'Business & Management',
+    syllabusKey: 'Business & Management',
+    duration: '6 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 30000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 4500,
+    imageUrl: BRAND_IMAGES.posterDiplomaBusinessMarketing,
+    description:
+      'Strategic leadership, managerial finance, marketing operations, and digital transformation for modern executives.',
+  },
+  {
+    id: 'dip-intl-hrm',
+    code: 'TM-DHR-27',
+    name: 'International Diploma in Human Resource Management',
+    category: 'Diploma',
+    domain: 'Business & Management',
+    syllabusKey: 'Business & Management',
+    duration: '8 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 66000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 4500,
+    description:
+      'Strategic workforce planning, performance systems, Sri Lankan labor law awareness, and people analytics.',
+  },
+  {
+    id: 'dip-intl-ecommerce',
+    code: 'TM-DEC-27',
+    name: 'International Diploma in E-Commerce',
+    category: 'Diploma',
+    domain: 'Business & Management',
+    syllabusKey: 'Business & Management',
+    duration: '6 Months',
+    mode: 'Online',
+    courseFeeLkr: 60000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 4000,
+    description:
+      'Cross-border e-commerce architecture, conversion optimization, marketplace scaling, and AI-assisted merchandising.',
+  },
+
+  // Psychology (1)
+  {
+    id: 'dip-intl-psychology',
+    code: 'TM-DPS-27',
+    name: 'International Diploma in Psychology',
+    category: 'Diploma',
+    domain: 'Psychology',
+    syllabusKey: 'Psychology',
+    duration: '8 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 70000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 4500,
+    description:
+      'In-depth cognitive, developmental, organizational, and applied counseling foundations with structured case studies.',
+  },
+
+  // Arabic & Islamic Studies (4)
+  {
+    id: 'dip-arabic-language',
+    code: 'TM-DAL-27',
+    name: 'Diploma in Arabic Language',
+    category: 'Diploma',
+    domain: 'Arabic & Islamic Studies',
+    syllabusKey: 'Arabic & Islamic Studies',
+    duration: '10 Months',
+    mode: 'Online',
+    courseFeeLkr: 48000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 3500,
+    description:
+      'Advanced Arabic linguistics, fluent conversation, classical and modern reading comprehension, and translation skills.',
+  },
+  {
+    id: 'dip-islamic-studies',
+    code: 'TM-DIS-27',
+    name: 'Diploma in Islamic Studies',
+    category: 'Diploma',
+    domain: 'Arabic & Islamic Studies',
+    syllabusKey: 'Arabic & Islamic Studies',
+    duration: '10 Months',
+    mode: 'Online',
+    courseFeeLkr: 48000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 3500,
+    description:
+      'Structured multi-discipline Islamic scholarship covering Tafsir, Hadith principles, Fiqh, and Islamic civilization.',
+  },
+  {
+    id: 'dip-advanced-tajweed',
+    code: 'TM-DAT-27',
+    name: 'Advanced Tajweed Programme',
+    category: 'Diploma',
+    domain: 'Arabic & Islamic Studies',
+    syllabusKey: 'Arabic & Islamic Studies',
+    duration: '8 Months',
+    mode: 'Online',
+    courseFeeLkr: 42000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 3000,
+    description:
+      'Mastery-level Tajweed theory and intensive oral recitation refinement under qualified teachers.',
+  },
+  {
+    id: 'dip-hifz-ul-quran',
+    code: 'TM-DHQ-27',
+    name: "Hifz-ul-Qur'an Programme",
+    category: 'Diploma',
+    domain: 'Arabic & Islamic Studies',
+    syllabusKey: 'Arabic & Islamic Studies',
+    duration: '12–24 Months',
+    mode: 'Hybrid',
+    courseFeeLkr: 54000,
+    feeConfigured: true,
+    registrationFeeLkr: 3000,
+    certificateFeeLkr: 3500,
+    description:
+      "Structured Qur'an memorization track with daily Sabaq, Sabqi, and Manzil milestones and personalized revision schedules.",
+  },
 ];
 
-export const SEED_COURSES: Course[] = RAW_32_COURSES.map(({ customSyllabus, imageUrl, ...item }) => ({
-  ...item,
-  imageUrl: imageUrl || imageForDomain(item.domain),
-  level: item.category === 'Diploma' ? 'International Diploma (Level 4/5)' : 'Certificate Foundation (Level 3)',
-  installmentPlan:
-    item.courseFeeLkr === 0
-      ? '100% Free Course · Registration & Optional Certificate Fee Only'
-      : item.category === 'Diploma'
-        ? 'Up to 4 Monthly Installments (0% Interest)'
-        : '2 Monthly Installments Available',
-  lecturerName: 'TECHMAN COLLEGE Senior Faculty',
-  batchName: item.mode === 'Online' ? 'Online Batch 04 (2027 Intake)' : 'Online Batch 04 / Physical Batch 02',
-  startDate: '2026-12-05',
-  endDate: item.category === 'Diploma' ? '2027-06-30' : '2027-03-15',
-  maxStudents: 45,
-  entryRequirements: item.category === 'Diploma'
-    ? 'G.C.E. O/L or A/L completion, or equivalent work/certificate experience. Basic English & computer literacy.'
-    : 'Open to school leavers, undergraduates, job seekers, and working professionals. No prior experience required.',
-  learningOutcomes: [
-    `Apply industry-current ${item.domain} workflows to real Sri Lankan & global client briefs`,
-    'Complete graded practical assignments and a verified capstone portfolio project',
-    'Pass formal evaluation to earn an ABE-Endorsed / QR-verifiable TECHMAN COLLEGE digital credential',
-  ],
-  syllabusTopics: customSyllabus || DOMAIN_SYLLABI[item.domain] || DOMAIN_SYLLABI['Information Technology'],
-  certificateEligible: true,
-  status: 'published',
+export const SEED_COURSES: Course[] = RAW_40_COURSES.map(
+  ({ customSyllabus, imageUrl, syllabusKey, ...item }) => {
+    const isFree = Boolean(item.isFree);
+    return {
+      ...item,
+      slug: makeCourseSlug(item.name),
+      imageUrl: imageUrl || imageForDomain(item.domain),
+      bannerUrl: imageUrl || imageForDomain(item.domain),
+      currency: 'LKR',
+      isFree,
+      feeConfigured: isFree,
+      courseFeeLkr: 0,
+      registrationFeeLkr: 0,
+      certificateFeeLkr: 0,
+      duration: 'Pending Admin Setup',
+      courseLanguage: 'Pending Admin Setup',
+      branchIds: ['branch-panadura', 'branch-kalutara', 'branch-colombo-hq', 'branch-online-global'],
+      admissionStatus: 'open',
+      academicYear: '2027',
+      featured: Boolean(item.featured),
+      seoTitle: `${item.name} — 2027 Intake | TECHMAN COLLEGE ONLINE`.slice(0, 180),
+      seoDescription: item.description.slice(0, 360),
+      level:
+        item.category === 'Diploma'
+          ? 'Diploma Level (2027)'
+          : 'Certificate Level (2027)',
+      installmentPlan: isFree
+        ? '100% Free Course Tuition'
+        : 'Pending Admin Setup',
+      lecturerName: 'Pending Admin Setup',
+      batchName: '2027 Intake — Pending Admin Setup',
+      startDate: 'Pending Admin Setup',
+      endDate: 'Pending Admin Setup',
+      maxStudents: 45,
+      entryRequirements: 'Pending Admin Setup',
+      learningOutcomes: [
+        `Build practical foundational and applied competencies in ${item.name}`,
+        'Complete structured hands-on coursework and guided assessments via TECHMAN COLLEGE ONLINE',
+        'Prepare a verifiable project portfolio reviewed by course lecturers',
+      ],
+      syllabusTopics:
+        customSyllabus || DOMAIN_SYLLABI[syllabusKey] || DOMAIN_SYLLABI['Information Technology'],
+      certificateEligible: true,
+      status: 'published',
+      institutionId: INSTITUTE_INFO.institutionId,
+    };
+  }
+);
+
+export const DEFAULT_BRAND_SETTINGS: BrandSettings = {
   institutionId: INSTITUTE_INFO.institutionId,
-}));
+  brandName: 'TECHMAN COLLEGE ONLINE',
+  shortName: 'TECHMAN COLLEGE',
+  tagline: 'Learn · Innovate · Create — 2027 Official Intake',
+  primaryColor: '#101D35',
+  secondaryColor: '#172A45',
+  accentColor: '#1677FF',
+  lightSurfaceColor: '#EAF1FC',
+  logoUrl: BRAND_IMAGES.officialLogo,
+  altLogoUrl: BRAND_IMAGES.officialLogo,
+  founderPhotoUrl: BRAND_IMAGES.founderPhotoOriginal,
+  contactPhone: INSTITUTE_INFO.phone,
+  whatsappNumber: INSTITUTE_INFO.whatsappDigits,
+  website: INSTITUTE_INFO.website,
+  email: INSTITUTE_INFO.publicEmail,
+  defaultFooterNote: 'TECHMAN COLLEGE ONLINE · Established in 2021 · https://techmancollege.online',
+};
+
+export const DEFAULT_INTEGRATION_CONFIGS: IntegrationConfig[] = [
+  {
+    id: 'openai',
+    provider: 'openai',
+    label: 'OpenAI / ChatGPT',
+    category: 'AI & LLM',
+    enabled: true,
+    defaultModel: 'gpt-4o-mini',
+    temperature: 0.5,
+    maxTokens: 1200,
+    monthlyBudgetUsd: 50,
+    allowedFeatures: [
+      'poster_copy',
+      'course_descriptions',
+      'social_captions',
+      'syllabus_drafts',
+      'translations',
+      'faqs',
+    ],
+    connectionStatus: 'not_configured',
+    notes: 'Reads server-side OPENAI_API_KEY via /api/integrations/openai/*. Never stored in browser.',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+  {
+    id: 'gemini_ai',
+    provider: 'gemini_ai',
+    label: 'Google Gemini AI (Server SDK)',
+    category: 'AI & LLM',
+    enabled: true,
+    defaultModel: 'gemini-4-hydrogen',
+    temperature: 0.4,
+    maxTokens: 2048,
+    allowedFeatures: ['poster_copy', 'ai_tutor', 'exam_assistant', 'career_center', 'ceo_assistant'],
+    connectionStatus: 'not_configured',
+    notes: 'Server-side @google/genai SDK backed by GEMINI_API_KEY.',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+  {
+    id: 'apify',
+    provider: 'apify',
+    label: 'Apify Automation & Research',
+    category: 'Automation & Research',
+    enabled: false,
+    defaultActorId: 'apify/website-content-crawler',
+    allowedFeatures: ['public_course_research', 'trend_monitoring', 'website_content_check'],
+    connectionStatus: 'not_configured',
+    notes: 'Reads server-side APIFY_API_TOKEN. Strictly limited to approved public research workflows.',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+  {
+    id: 'google_sheets',
+    provider: 'google_sheets',
+    label: 'Google Sheets Lead Import',
+    category: 'Data & Storage',
+    enabled: true,
+    connectionStatus: 'not_configured',
+    notes: 'Supports published Google Sheets CSV URLs and OAuth read-only spreadsheets import.',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+  {
+    id: 'firebase',
+    provider: 'firebase',
+    label: 'Firebase Auth, Firestore & Storage',
+    category: 'Data & Storage',
+    enabled: true,
+    connectionStatus: 'connected',
+    notes: 'Primary authenticated database & security rules engine (Enterprise Firestore).',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+  {
+    id: 'whatsapp_business',
+    provider: 'whatsapp_business',
+    label: 'WhatsApp Click-to-Chat & Promo Export',
+    category: 'Messaging & Analytics',
+    enabled: true,
+    connectionStatus: 'connected',
+    notes: 'Direct wa.me enquiry links and formatted WhatsApp promotional broadcasts (+94 710 108 803).',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+  {
+    id: 'email_provider',
+    provider: 'email_provider',
+    label: 'SMTP / Transactional Email',
+    category: 'Messaging & Analytics',
+    enabled: false,
+    connectionStatus: 'not_configured',
+    notes: 'Configure external SMTP / Resend / SendGrid server credentials to enable automated outbound emails.',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+  {
+    id: 'analytics',
+    provider: 'analytics',
+    label: 'Web & Campaign Analytics',
+    category: 'Messaging & Analytics',
+    enabled: false,
+    connectionStatus: 'not_configured',
+    notes: 'Optional GA4 / Meta Pixel server-side measurement ID.',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+];
+
+export const DEFAULT_AUTOMATION_WORKFLOWS: AutomationWorkflow[] = [
+  {
+    id: 'new_course_poster',
+    workflowKey: 'new_course_poster',
+    name: 'New Course Poster Draft',
+    description:
+      'Prepares a validated draft poster + social caption whenever a new course is added. Saves as PENDING_APPROVAL — never publishes automatically.',
+    enabled: true,
+    requiresAdminApproval: true,
+    defaultLanguage: 'English',
+    defaultSizePreset: 'instagram_portrait',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+  {
+    id: 'course_update_detector',
+    workflowKey: 'course_update_detector',
+    name: 'Course Update Change Detector',
+    description:
+      'Flags linked posters when a course fee, duration, title, or study mode changes, invalidating stale approvals and queueing a new version.',
+    enabled: true,
+    requiresAdminApproval: true,
+    defaultLanguage: 'English',
+    defaultSizePreset: 'instagram_portrait',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+  {
+    id: 'free_course_campaign',
+    workflowKey: 'free_course_campaign',
+    name: 'FREE Course Campaign Generator',
+    description:
+      'Generates FREE-badged promotional posters and WhatsApp/social copy for all 5 official FREE Certificate courses for Super Admin review.',
+    enabled: true,
+    requiresAdminApproval: true,
+    defaultLanguage: 'English',
+    defaultSizePreset: 'instagram_square',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+  {
+    id: 'bulk_campaign_package',
+    workflowKey: 'bulk_campaign_package',
+    name: 'Bulk 2027 Intake Campaign Package',
+    description:
+      'Creates individual validated posters, social captions, hashtags, and WhatsApp announcements for selected courses. Every poster requires explicit approval.',
+    enabled: true,
+    requiresAdminApproval: true,
+    defaultLanguage: 'English',
+    defaultSizePreset: 'instagram_portrait',
+    institutionId: INSTITUTE_INFO.institutionId,
+  },
+];
 
 export const SEED_BRANCHES: Branch[] = [
   {

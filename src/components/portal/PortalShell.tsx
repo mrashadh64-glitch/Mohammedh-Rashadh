@@ -9,6 +9,7 @@ import {
   Calendar,
   CalendarCheck,
   CheckCheck,
+  Cpu,
   CreditCard,
   Database,
   FileCheck2,
@@ -19,11 +20,17 @@ import {
   GraduationCap,
   History,
   Image as ImageIcon,
+  KeyRound,
   Layers,
   LayoutDashboard,
   LogOut,
+  Mail,
+  MapPin,
   Menu,
   MessageSquare,
+  Mic,
+  Orbit,
+  Palette,
   RefreshCw,
   Share2,
   Shield,
@@ -33,11 +40,15 @@ import {
   UserCheck,
   UserPlus,
   Users,
+  Wand2,
+  Workflow,
   X,
 } from 'lucide-react';
 import { collection, doc, getDoc, getDocs, limit, query, updateDoc, where } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { auth, db } from '../../lib/firebase';
 import {
+  DEFAULT_AUTOMATION_WORKFLOWS,
+  DEFAULT_BRAND_SETTINGS,
   DEFAULT_FREE_SKILL_PROGRAMME,
   DEFAULT_SYSTEM_SETTINGS,
   INSTITUTE_INFO,
@@ -48,11 +59,14 @@ import {
 import { getSpecialProgrammeBySlug } from '../../lib/firestoreService';
 import {
   AffiliateRecord,
+  ApifyRunRecord,
   Application,
   Assignment,
   AttendanceRecord,
   AuditLog,
+  AutomationWorkflow,
   Branch,
+  BrandSettings,
   Certificate,
   CmsItem,
   CommunityPost,
@@ -61,6 +75,9 @@ import {
   Examination,
   ExamResult,
   Expense,
+  GeneratedPoster,
+  IntegrationConfig,
+  IntegrationLog,
   LeadActivity,
   LeadImportBatch,
   LeadRecord,
@@ -70,10 +87,15 @@ import {
   ModuleProgressRecord,
   NotificationItem,
   Payment,
+  PosterApprovalLog,
+  PosterPublishingLog,
+  PosterVersion,
   ProgrammeEnquiry,
   RoleInvitation,
   SpecialProgramme,
+  StudentAccountRecord,
   Submission,
+  SyllabusApprovalLog,
   SyllabusRecord,
   SyllabusVersionRecord,
   SystemSettings,
@@ -84,6 +106,7 @@ import { PWAInstallButton, ThemeToggleButton } from '../common/PlatformWidgets';
 import { PublicPage } from '../public/PublicWebsite';
 import type { LeadMode } from './LeadManagementHub';
 import type { SyllabusMode } from './SyllabusManagementHub';
+import type { PosterStudioTab } from './AIPosterStudio';
 
 // Tab-level code splitting so recharts & xlsx only load when those specific modules open
 const DashboardAndAnalytics = lazy(() =>
@@ -112,6 +135,24 @@ const LeadManagementHub = lazy(() =>
 );
 const SyllabusManagementHub = lazy(() =>
   import('./SyllabusManagementHub').then((m) => ({ default: m.SyllabusManagementHub }))
+);
+const AIPosterStudio = lazy(() =>
+  import('./AIPosterStudio').then((m) => ({ default: m.AIPosterStudio }))
+);
+const IntegrationsCenter = lazy(() =>
+  import('./IntegrationsCenter').then((m) => ({ default: m.IntegrationsCenter }))
+);
+const StudentAccountsHub = lazy(() =>
+  import('./StudentAccountsHub').then((m) => ({ default: m.StudentAccountsHub }))
+);
+const GeminiMultimodalStudio = lazy(() =>
+  import('../features/GeminiMultimodalStudio').then((m) => ({ default: m.GeminiMultimodalStudio }))
+);
+const CampusMapsExplorer = lazy(() =>
+  import('../features/CampusMapsExplorer').then((m) => ({ default: m.CampusMapsExplorer }))
+);
+const Academy3DShowcase = lazy(() =>
+  import('../features/Academy3DShowcase').then((m) => ({ default: m.Academy3DShowcase }))
 );
 
 const ModuleSkeleton: React.FC = () => (
@@ -143,6 +184,7 @@ interface NavItem {
     | 'Learning & AI'
     | 'CRM & Admissions'
     | 'Academic Management'
+    | 'Marketing & Design'
     | 'Operations & Finance'
     | 'Governance & SaaS';
   visible: boolean;
@@ -153,7 +195,15 @@ export const PortalShell: React.FC<PortalShellProps> = ({
   toggleTheme,
   onBackToPublic,
 }) => {
-  const { firebaseUser, profile, isOwner, signOutUser } = useAuth();
+  const {
+    firebaseUser,
+    authMode,
+    studentSessionToken,
+    studentAccount,
+    profile,
+    isOwner,
+    signOutUser,
+  } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -197,11 +247,54 @@ export const PortalShell: React.FC<PortalShellProps> = ({
   const [syllabusVersions, setSyllabusVersions] = useState<SyllabusVersionRecord[]>([]);
   const [moduleProgress, setModuleProgress] = useState<ModuleProgressRecord[]>([]);
 
-  const userEmail = firebaseUser?.email || '';
+  // Module 3 (AI Poster Studio & Approval Centre) & Module 4 (Centralized AI Integrations)
+  const [brandSettings, setBrandSettings] = useState<BrandSettings>(DEFAULT_BRAND_SETTINGS);
+  const [generatedPosters, setGeneratedPosters] = useState<GeneratedPoster[]>([]);
+  const [posterVersions, setPosterVersions] = useState<PosterVersion[]>([]);
+  const [posterApprovalLogs, setPosterApprovalLogs] = useState<PosterApprovalLog[]>([]);
+  const [posterPublishingLogs, setPosterPublishingLogs] = useState<PosterPublishingLog[]>([]);
+  const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
+  const [integrationLogs, setIntegrationLogs] = useState<IntegrationLog[]>([]);
+  const [apifyRuns, setApifyRuns] = useState<ApifyRunRecord[]>([]);
+  const [automationWorkflows, setAutomationWorkflows] = useState<AutomationWorkflow[]>(
+    DEFAULT_AUTOMATION_WORKFLOWS
+  );
+  const [studentAccounts, setStudentAccounts] = useState<StudentAccountRecord[]>([]);
+  const [syllabusApprovalLogs, setSyllabusApprovalLogs] = useState<SyllabusApprovalLog[]>([]);
+
+  const userEmail = firebaseUser?.email || studentAccount?.email || '';
 
   const loadWorkspaceData = useCallback(async () => {
     if (!profile) return;
     setRefreshing(true);
+
+    // Student ID & Password session: hydrate scoped enrolled workspace via server endpoint
+    if (authMode === 'student_credentials' && studentSessionToken) {
+      try {
+        const resp = await fetch('/api/student-auth/workspace', {
+          headers: { Authorization: `Bearer ${studentSessionToken}` },
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const wsCourses = Array.isArray(data.courses) && data.courses.length > 0 ? data.courses : SEED_COURSES;
+          setCourses(wsCourses);
+          setEnrollments(Array.isArray(data.enrollments) ? data.enrollments : []);
+          setSyllabuses(Array.isArray(data.syllabuses) ? data.syllabuses : []);
+          setSyllabusVersions(Array.isArray(data.syllabusVersions) ? data.syllabusVersions : []);
+          setUsersList([profile]);
+        } else {
+          setCourses(SEED_COURSES);
+          setUsersList([profile]);
+        }
+      } catch {
+        setCourses(SEED_COURSES);
+        setUsersList([profile]);
+      } finally {
+        setLoadingData(false);
+        setRefreshing(false);
+      }
+      return;
+    }
 
     const safeGetDocs = async <T,>(
       q: ReturnType<typeof query> | ReturnType<typeof collection>,
@@ -227,6 +320,11 @@ export const PortalShell: React.FC<PortalShellProps> = ({
       const canAuthorSyllabus =
         isOwner ||
         ['SUPER_ADMIN', 'ADMIN', 'ACADEMIC_MANAGER', 'LECTURER'].includes(profile.role);
+      const canAccessMarketing =
+        isOwner ||
+        ['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER', 'BRANCH_MANAGER', 'LECTURER'].includes(
+          profile.role
+        );
 
       // Strictly synchronized with deployed firestore.rules allow list predicates
       const [
@@ -559,11 +657,151 @@ export const PortalShell: React.FC<PortalShellProps> = ({
       if (settingsSnap && settingsSnap.exists()) {
         setSettings(settingsSnap.data() as SystemSettings);
       }
+
+      // Module 3 & Module 4 loaders (aligned with deployed firestore.rules)
+      const [
+        brandSnap,
+        postersPrimary,
+        postersPublished,
+        versionsData,
+        approvalLogsData,
+        publishingLogsData,
+        integrationsData,
+        integrationLogsData,
+        apifyRunsData,
+        workflowsData,
+      ] = await Promise.all([
+        getDoc(doc(db, 'brandSettings', INSTITUTE_INFO.institutionId)).catch(() => null),
+        canAccessMarketing
+          ? safeGetDocs(
+              isOwner
+                ? query(collection(db, 'generatedPosters'), limit(200))
+                : query(collection(db, 'generatedPosters'), where('createdByUid', '==', uid), limit(150)),
+              (id, data) => ({ id, ...(data as Omit<GeneratedPoster, 'id'>) })
+            )
+          : Promise.resolve<GeneratedPoster[]>([]),
+        canAccessMarketing && !isOwner
+          ? safeGetDocs(
+              query(collection(db, 'generatedPosters'), where('status', '==', 'published'), limit(100)),
+              (id, data) => ({ id, ...(data as Omit<GeneratedPoster, 'id'>) })
+            )
+          : Promise.resolve<GeneratedPoster[]>([]),
+        canAccessMarketing
+          ? safeGetDocs(
+              isOwner
+                ? query(collection(db, 'posterVersions'), limit(300))
+                : query(collection(db, 'posterVersions'), where('createdByUid', '==', uid), limit(150)),
+              (id, data) => ({ id, ...(data as Omit<PosterVersion, 'id'>) })
+            )
+          : Promise.resolve<PosterVersion[]>([]),
+        canAccessMarketing
+          ? safeGetDocs(
+              isOwner
+                ? query(collection(db, 'posterApprovalLogs'), limit(250))
+                : query(collection(db, 'posterApprovalLogs'), where('performedByUid', '==', uid), limit(150)),
+              (id, data) => ({ id, ...(data as Omit<PosterApprovalLog, 'id'>) })
+            )
+          : Promise.resolve<PosterApprovalLog[]>([]),
+        isOwner
+          ? safeGetDocs(query(collection(db, 'posterPublishingLogs'), limit(200)), (id, data) => ({
+              id,
+              ...(data as Omit<PosterPublishingLog, 'id'>),
+            }))
+          : Promise.resolve<PosterPublishingLog[]>([]),
+        isOwner
+          ? safeGetDocs(collection(db, 'integrations'), (id, data) => ({
+              id: id as IntegrationConfig['id'],
+              ...(data as Omit<IntegrationConfig, 'id'>),
+            }))
+          : Promise.resolve<IntegrationConfig[]>([]),
+        isOwner
+          ? safeGetDocs(query(collection(db, 'integrationLogs'), limit(150)), (id, data) => ({
+              id,
+              ...(data as Omit<IntegrationLog, 'id'>),
+            }))
+          : Promise.resolve<IntegrationLog[]>([]),
+        isOwner
+          ? safeGetDocs(query(collection(db, 'apifyRuns'), limit(80)), (id, data) => ({
+              id,
+              ...(data as Omit<ApifyRunRecord, 'id'>),
+            }))
+          : Promise.resolve<ApifyRunRecord[]>([]),
+        isOwner
+          ? safeGetDocs(collection(db, 'automationWorkflows'), (id, data) => ({
+              id,
+              ...(data as Omit<AutomationWorkflow, 'id'>),
+            }))
+          : Promise.resolve<AutomationWorkflow[]>([]),
+      ]);
+
+      if (brandSnap && brandSnap.exists()) {
+        setBrandSettings(brandSnap.data() as BrandSettings);
+      }
+      const posterMap = new Map<string, GeneratedPoster>();
+      for (const p of [...postersPrimary, ...postersPublished]) {
+        posterMap.set(p.id, p);
+      }
+      setGeneratedPosters(
+        Array.from(posterMap.values()).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+      );
+      setPosterVersions(
+        versionsData.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      );
+      setPosterApprovalLogs(
+        approvalLogsData.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+      );
+      setPosterPublishingLogs(
+        publishingLogsData.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+      );
+      setIntegrations(integrationsData);
+      setIntegrationLogs(
+        integrationLogsData.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      );
+      setApifyRuns(apifyRunsData.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
+      if (workflowsData.length > 0) {
+        setAutomationWorkflows(workflowsData);
+      }
+
+      // Load Syllabus Approval Logs & Admin Student Account Stats
+      const [sylLogsData, studentAccList] = await Promise.all([
+        canAuthorSyllabus
+          ? safeGetDocs(
+              isOwner
+                ? query(collection(db, 'syllabusApprovalLogs'), limit(200))
+                : query(
+                    collection(db, 'syllabusApprovalLogs'),
+                    where('performedByUid', '==', uid),
+                    limit(100)
+                  ),
+              (id, data) => ({ id, ...(data as Omit<SyllabusApprovalLog, 'id'>) })
+            )
+          : Promise.resolve<SyllabusApprovalLog[]>([]),
+        isOwner || profile.role === 'ADMIN'
+          ? (async (): Promise<StudentAccountRecord[]> => {
+              try {
+                const token = await auth.currentUser?.getIdToken();
+                if (!token) return [];
+                const resp = await fetch('/api/student-accounts', {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!resp.ok) return [];
+                const data = await resp.json();
+                return Array.isArray(data.accounts) ? data.accounts : [];
+              } catch {
+                return [];
+              }
+            })()
+          : Promise.resolve<StudentAccountRecord[]>([]),
+      ]);
+      setSyllabusApprovalLogs(
+        sylLogsData.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+      );
+      setStudentAccounts(studentAccList);
     } finally {
       setLoadingData(false);
       setRefreshing(false);
     }
-  }, [profile, isOwner, userEmail]);
+  }, [profile, isOwner, userEmail, authMode, studentSessionToken]);
 
   useEffect(() => {
     void loadWorkspaceData();
@@ -578,6 +816,11 @@ export const PortalShell: React.FC<PortalShellProps> = ({
   const isCrmManager = isCrmAdmin || role === 'BRANCH_MANAGER';
   const isSyllabusAuthor =
     isOwner || ['SUPER_ADMIN', 'ADMIN', 'ACADEMIC_MANAGER', 'LECTURER'].includes(role);
+  const isMarketingStaff =
+    isOwner ||
+    ['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER', 'BRANCH_MANAGER', 'LECTURER'].includes(role);
+  const isMarketingFull =
+    isOwner || ['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER', 'BRANCH_MANAGER'].includes(role);
 
   const navItems: NavItem[] = useMemo(
     () => [
@@ -600,6 +843,27 @@ export const PortalShell: React.FC<PortalShellProps> = ({
         id: 'ai-tutor',
         label: 'TECHMAN COLLEGE AI Tutor',
         icon: Sparkles,
+        section: 'Learning & AI',
+        visible: true,
+      },
+      {
+        id: 'multimodal-ai',
+        label: 'Multimodal AI Lab',
+        icon: Mic,
+        section: 'Learning & AI',
+        visible: true,
+      },
+      {
+        id: 'campus-map',
+        label: 'Campus Map & Routes',
+        icon: MapPin,
+        section: 'Learning & AI',
+        visible: true,
+      },
+      {
+        id: 'academy-3d',
+        label: '3D Academy Pavilion',
+        icon: Orbit,
         section: 'Learning & AI',
         visible: true,
       },
@@ -738,6 +1002,49 @@ export const PortalShell: React.FC<PortalShellProps> = ({
         section: 'Academic Management',
         visible: true,
       },
+      // Marketing & Design (AI Poster Studio & Mandatory Approval Centre — strictly hidden from Students)
+      {
+        id: 'poster-approval',
+        label: isOwner ? 'Poster Approval Centre' : 'My Poster Submissions',
+        icon: ShieldCheck,
+        section: 'Marketing & Design',
+        visible: isMarketingStaff,
+      },
+      {
+        id: 'poster-generator',
+        label: role === 'LECTURER' ? 'Suggest Course Poster' : 'AI Poster Generator',
+        icon: Wand2,
+        section: 'Marketing & Design',
+        visible: isMarketingStaff,
+      },
+      {
+        id: 'poster-bulk',
+        label: 'Bulk Poster Generator',
+        icon: Layers,
+        section: 'Marketing & Design',
+        visible: isMarketingFull,
+      },
+      {
+        id: 'poster-library',
+        label: 'Marketing Library',
+        icon: ImageIcon,
+        section: 'Marketing & Design',
+        visible: isMarketingStaff,
+      },
+      {
+        id: 'poster-brand',
+        label: 'Brand Settings',
+        icon: Palette,
+        section: 'Marketing & Design',
+        visible: isOwner || ['ADMIN', 'CONTENT_MANAGER'].includes(role),
+      },
+      {
+        id: 'poster-workflows',
+        label: 'Automation Workflows',
+        icon: Workflow,
+        section: 'Marketing & Design',
+        visible: isOwner || ['ADMIN', 'CONTENT_MANAGER'].includes(role),
+      },
       // Operations & Finance
       {
         id: 'finance',
@@ -761,6 +1068,27 @@ export const PortalShell: React.FC<PortalShellProps> = ({
         visible: isOwner || ['ADMIN', 'BRANCH_MANAGER', 'ACADEMIC_MANAGER'].includes(role),
       },
       // Governance & SaaS
+      {
+        id: 'integrations-center',
+        label: 'AI Integrations Center',
+        icon: Cpu,
+        section: 'Governance & SaaS',
+        visible: isOwner,
+      },
+      {
+        id: 'student-accounts',
+        label: 'Student ID & Accounts',
+        icon: KeyRound,
+        section: 'Governance & SaaS',
+        visible: isOwner || role === 'ADMIN',
+      },
+      {
+        id: 'email-logs',
+        label: 'Email Notifications & Logs',
+        icon: Mail,
+        section: 'Governance & SaaS',
+        visible: isOwner || role === 'ADMIN',
+      },
       {
         id: 'people',
         label: 'Users, Staff & RBAC',
@@ -797,14 +1125,33 @@ export const PortalShell: React.FC<PortalShellProps> = ({
         visible: isOwner || role === 'ADMIN',
       },
     ],
-    [isOwner, role, isCrmRole, isCrmAdmin, isCrmManager, isSyllabusAuthor]
+    [
+      isOwner,
+      role,
+      isCrmRole,
+      isCrmAdmin,
+      isCrmManager,
+      isSyllabusAuthor,
+      isMarketingStaff,
+      isMarketingFull,
+    ]
   );
 
   const visibleNav = navItems.filter((n) => n.visible);
+  const allowedTabIds = useMemo(() => new Set(visibleNav.map((n) => n.id)), [visibleNav]);
+  const isTabAllowed = allowedTabIds.has(activeTab);
+
+  useEffect(() => {
+    if (!allowedTabIds.has(activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [activeTab, allowedTabIds]);
+
   const sections = [
     'Learning & AI',
     'CRM & Admissions',
     'Academic Management',
+    'Marketing & Design',
     'Operations & Finance',
     'Governance & SaaS',
   ] as const;
@@ -813,6 +1160,9 @@ export const PortalShell: React.FC<PortalShellProps> = ({
   const canEditSpecialProgramme = isOwner || ['ADMIN', 'CONTENT_MANAGER'].includes(role);
   const canManageEnquiries = isOwner || ['ADMIN', 'ADMISSION_OFFICER'].includes(role);
   const newEnquiryCount = programmeEnquiries.filter((e) => e.status === 'new').length;
+  const pendingPosterApprovalCount = generatedPosters.filter(
+    (p) => p.status === 'pending_approval' || p.status === 'needs_update'
+  ).length;
   const todayIso = new Date().toISOString().slice(0, 10);
   const dueFollowUpCount = leads.filter(
     (l) =>
@@ -961,6 +1311,11 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                               {pendingSyllabusReviewCount}
                             </span>
                           )}
+                        {item.id === 'poster-approval' && pendingPosterApprovalCount > 0 && (
+                          <span className="px-1.5 py-0.5 rounded bg-blue-500 text-white text-[10px] font-mono font-bold tabular-nums">
+                            {pendingPosterApprovalCount}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -1091,6 +1446,17 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                               Open Host Enquiries →
                             </button>
                           )}
+                          {n.category === 'Poster Governance' && isMarketingStaff && (
+                            <button
+                              onClick={() => {
+                                setNotifOpen(false);
+                                setActiveTab('poster-approval');
+                              }}
+                              className="mt-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400 hover:underline cursor-pointer"
+                            >
+                              Open Poster Approval Centre →
+                            </button>
+                          )}
                         </div>
                       ))
                     )}
@@ -1127,6 +1493,9 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                   usersList={usersList}
                   leads={leads}
                   syllabuses={syllabuses}
+                  syllabusVersions={syllabusVersions}
+                  studentAccounts={studentAccounts}
+                  generatedPosters={generatedPosters}
                   moduleProgress={moduleProgress}
                   specialProgramme={specialProgramme}
                   onNavigateTab={setActiveTab}
@@ -1135,12 +1504,29 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                 />
               )}
 
-              {(activeTab === 'lead-dashboard' ||
-                activeTab === 'lead-all' ||
-                activeTab === 'lead-import' ||
-                activeTab === 'lead-calendar' ||
-                activeTab === 'lead-assignments' ||
-                activeTab === 'lead-reports') && (
+              {isTabAllowed &&
+                (isOwner || role === 'ADMIN') &&
+                (activeTab === 'student-accounts' || activeTab === 'email-logs') && (
+                <StudentAccountsHub
+                  mode={activeTab}
+                  profile={profile}
+                  userEmail={userEmail}
+                  isOwner={isOwner}
+                  courses={courses}
+                  branches={branches}
+                  migratedStudents={migratedStudents}
+                  onRefreshData={loadWorkspaceData}
+                />
+              )}
+
+              {isTabAllowed &&
+                isCrmRole &&
+                (activeTab === 'lead-dashboard' ||
+                  activeTab === 'lead-all' ||
+                  activeTab === 'lead-import' ||
+                  activeTab === 'lead-calendar' ||
+                  activeTab === 'lead-assignments' ||
+                  activeTab === 'lead-reports') && (
                 <LeadManagementHub
                   mode={activeTab as LeadMode}
                   profile={profile}
@@ -1159,11 +1545,13 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                 />
               )}
 
-              {(activeTab === 'syllabus-list' ||
-                activeTab === 'syllabus-upload' ||
-                activeTab === 'syllabus-builder' ||
-                activeTab === 'syllabus-modules' ||
-                activeTab === 'syllabus-versions') && (
+              {isTabAllowed &&
+                isSyllabusAuthor &&
+                (activeTab === 'syllabus-list' ||
+                  activeTab === 'syllabus-upload' ||
+                  activeTab === 'syllabus-builder' ||
+                  activeTab === 'syllabus-modules' ||
+                  activeTab === 'syllabus-versions') && (
                 <SyllabusManagementHub
                   mode={activeTab as SyllabusMode}
                   profile={profile}
@@ -1172,12 +1560,13 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                   courses={courses}
                   syllabuses={syllabuses}
                   syllabusVersions={syllabusVersions}
+                  syllabusApprovalLogs={syllabusApprovalLogs}
                   onNavigateTab={setActiveTab}
                   onRefreshData={loadWorkspaceData}
                 />
               )}
 
-              {activeTab === 'free-skill-admin' && (
+              {isTabAllowed && activeTab === 'free-skill-admin' && (
                 <SpecialProgrammeAdmin
                   profile={profile}
                   userEmail={userEmail}
@@ -1190,13 +1579,16 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                 />
               )}
 
-              {(activeTab === 'courses' || activeTab === 'lms' || activeTab === 'library') && (
+              {isTabAllowed &&
+                (activeTab === 'courses' || activeTab === 'lms' || activeTab === 'library') && (
                 <AcademicsAndLMS
                   mode={activeTab}
                   profile={profile}
                   userEmail={userEmail}
                   isOwner={isOwner}
                   courses={courses}
+                  branches={branches}
+                  auditLogs={auditLogs}
                   libraryResources={libraryResources}
                   enrollments={enrollments}
                   syllabuses={syllabuses}
@@ -1207,9 +1599,10 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                 />
               )}
 
-              {(activeTab === 'admissions' ||
-                activeTab === 'people' ||
-                activeTab === 'branches') && (
+              {isTabAllowed &&
+                (activeTab === 'admissions' ||
+                  activeTab === 'people' ||
+                  activeTab === 'branches') && (
                 <AdmissionsAndPeople
                   mode={activeTab}
                   profile={profile}
@@ -1227,7 +1620,7 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                 />
               )}
 
-              {activeTab === 'migration' && (
+              {isTabAllowed && isOwner && activeTab === 'migration' && (
                 <StudentMigrationStudio
                   profile={profile}
                   userEmail={userEmail}
@@ -1241,10 +1634,11 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                 />
               )}
 
-              {(activeTab === 'attendance' ||
-                activeTab === 'assessments' ||
-                activeTab === 'finance' ||
-                activeTab === 'certificates') && (
+              {isTabAllowed &&
+                (activeTab === 'attendance' ||
+                  activeTab === 'assessments' ||
+                  activeTab === 'finance' ||
+                  activeTab === 'certificates') && (
                 <OperationsFinanceCerts
                   mode={activeTab}
                   profile={profile}
@@ -1264,12 +1658,77 @@ export const PortalShell: React.FC<PortalShellProps> = ({
                 />
               )}
 
-              {(activeTab === 'ai-tutor' ||
-                activeTab === 'career' ||
-                activeTab === 'community' ||
-                activeTab === 'affiliates' ||
-                activeTab === 'cms' ||
-                activeTab === 'security') && (
+              {isTabAllowed &&
+                isMarketingStaff &&
+                (activeTab === 'poster-approval' ||
+                  activeTab === 'poster-generator' ||
+                  activeTab === 'poster-bulk' ||
+                  activeTab === 'poster-library' ||
+                  activeTab === 'poster-brand' ||
+                  activeTab === 'poster-workflows') && (
+                <AIPosterStudio
+                  mode={activeTab as PosterStudioTab}
+                  profile={profile}
+                  userEmail={userEmail}
+                  isSuperAdmin={isOwner}
+                  courses={courses}
+                  brandSettings={brandSettings}
+                  posters={generatedPosters}
+                  posterVersions={posterVersions}
+                  approvalLogs={posterApprovalLogs}
+                  publishingLogs={posterPublishingLogs}
+                  workflows={automationWorkflows}
+                  onRefresh={loadWorkspaceData}
+                  onNavigateTab={(tab) => setActiveTab(tab)}
+                />
+              )}
+
+              {isTabAllowed && isOwner && activeTab === 'integrations-center' && (
+                <IntegrationsCenter
+                  profile={profile}
+                  userEmail={userEmail}
+                  isSuperAdmin={isOwner}
+                  courses={courses}
+                  integrations={integrations}
+                  integrationLogs={integrationLogs}
+                  apifyRuns={apifyRuns}
+                  onRefresh={loadWorkspaceData}
+                />
+              )}
+
+              {isTabAllowed && activeTab === 'multimodal-ai' && (
+                <GeminiMultimodalStudio profile={profile} courses={courses} />
+              )}
+
+              {isTabAllowed && activeTab === 'campus-map' && (
+                <CampusMapsExplorer branches={branches} />
+              )}
+
+              {isTabAllowed && activeTab === 'academy-3d' && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1677FF]">
+                      Interactive 3D Spatial Showcase · Three.js WebGL
+                    </p>
+                    <h1 className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
+                      TECHMAN AI 2027 Interactive 3D Pavilion
+                    </h1>
+                  </div>
+                  <Academy3DShowcase
+                    courses={courses}
+                    onSelectDomain={() => setActiveTab('courses')}
+                    heightClass="h-[580px]"
+                  />
+                </div>
+              )}
+
+              {isTabAllowed &&
+                (activeTab === 'ai-tutor' ||
+                  activeTab === 'career' ||
+                  activeTab === 'community' ||
+                  activeTab === 'affiliates' ||
+                  activeTab === 'cms' ||
+                  activeTab === 'security') && (
                 <AIAndCommunityHub
                   mode={activeTab}
                   profile={profile}

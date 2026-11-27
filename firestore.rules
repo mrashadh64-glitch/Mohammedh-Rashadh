@@ -173,9 +173,11 @@ service cloud.firestore {
     function isValidCourse(data) {
       return data.keys().hasAll(['code', 'name', 'category', 'duration', 'mode', 'courseFeeLkr', 'status', 'institutionId']) &&
         data.keys().hasOnly([
-          'code', 'name', 'category', 'domain', 'description', 'imageUrl', 'level',
-          'duration', 'mode', 'courseFeeLkr', 'registrationFeeLkr', 'certificateFeeLkr',
-          'installmentPlan', 'lecturerId', 'lecturerName', 'batchName', 'startDate',
+          'code', 'slug', 'name', 'category', 'domain', 'description', 'imageUrl', 'bannerUrl', 'level',
+          'duration', 'mode', 'courseFeeLkr', 'feeConfigured', 'isFree', 'currency',
+          'registrationFeeLkr', 'certificateFeeLkr', 'installmentPlan', 'courseLanguage', 'branchIds',
+          'admissionStatus', 'academicYear', 'featured', 'seoTitle', 'seoDescription',
+          'lecturerId', 'lecturerName', 'batchName', 'startDate',
           'endDate', 'maxStudents', 'entryRequirements', 'learningOutcomes', 'syllabusTopics',
           'certificateEligible', 'status', 'institutionId', 'updatedAt'
         ]) &&
@@ -187,13 +189,25 @@ service cloud.firestore {
         isNonNegNum(data.courseFeeLkr) &&
         data.status in ['published', 'draft', 'archived'] &&
         isNonEmptyStr(data.institutionId, 64) &&
+        (!('slug' in data) || isStr(data.slug, 140)) &&
         (!('domain' in data) || isStr(data.domain, 64)) &&
         (!('description' in data) || isStr(data.description, 1200)) &&
-        (!('imageUrl' in data) || isStr(data.imageUrl, 500)) &&
+        (!('imageUrl' in data) || isStr(data.imageUrl, 240000)) &&
+        (!('bannerUrl' in data) || isStr(data.bannerUrl, 240000)) &&
         (!('level' in data) || isStr(data.level, 40)) &&
+        (!('feeConfigured' in data) || data.feeConfigured is bool) &&
+        (!('isFree' in data) || data.isFree is bool) &&
+        (!('currency' in data) || isStr(data.currency, 12)) &&
         (!('registrationFeeLkr' in data) || isNonNegNum(data.registrationFeeLkr)) &&
         (!('certificateFeeLkr' in data) || isNonNegNum(data.certificateFeeLkr)) &&
         (!('installmentPlan' in data) || isStr(data.installmentPlan, 120)) &&
+        (!('courseLanguage' in data) || isStr(data.courseLanguage, 64)) &&
+        (!('branchIds' in data) || (data.branchIds is list && data.branchIds.size() <= 20 && (data.branchIds.size() == 0 || data.branchIds[0] is string))) &&
+        (!('admissionStatus' in data) || data.admissionStatus in ['open', 'closing_soon', 'closed', 'upcoming']) &&
+        (!('academicYear' in data) || isStr(data.academicYear, 16)) &&
+        (!('featured' in data) || data.featured is bool) &&
+        (!('seoTitle' in data) || isStr(data.seoTitle, 180)) &&
+        (!('seoDescription' in data) || isStr(data.seoDescription, 360)) &&
         (!('lecturerId' in data) || isStr(data.lecturerId, 128)) &&
         (!('lecturerName' in data) || isStr(data.lecturerName, 120)) &&
         (!('batchName' in data) || isStr(data.batchName, 80)) &&
@@ -813,7 +827,7 @@ service cloud.firestore {
           'errorCount', 'backupExported', 'importedByUid', 'importedByEmail', 'institutionId', 'createdAt'
         ]) &&
         data.keys().hasOnly([
-          'fileName', 'sheetName', 'totalRows', 'importedCount', 'mergedCount',
+          'fileName', 'sheetName', 'batchFingerprint', 'totalRows', 'importedCount', 'mergedCount',
           'skippedDuplicates', 'errorCount', 'backupExported', 'importedByUid',
           'importedByEmail', 'institutionId', 'createdAt'
         ]) &&
@@ -828,7 +842,8 @@ service cloud.firestore {
         isNonEmptyStr(data.importedByEmail, 160) &&
         isNonEmptyStr(data.institutionId, 64) &&
         isNonEmptyStr(data.createdAt, 40) &&
-        (!('sheetName' in data) || isStr(data.sheetName, 120));
+        (!('sheetName' in data) || isStr(data.sheetName, 120)) &&
+        (!('batchFingerprint' in data) || isStr(data.batchFingerprint, 128));
     }
 
     function isValidSyllabus(data) {
@@ -940,6 +955,310 @@ service cloud.firestore {
         isNonEmptyStr(data.institutionId, 64) &&
         isNonEmptyStr(data.updatedAt, 40) &&
         (!('versionNumber' in data) || isNonNegNum(data.versionNumber));
+    }
+
+    function isValidBrandSettings(data) {
+      return data.keys().hasAll(['institutionId', 'brandName', 'shortName', 'primaryColor', 'accentColor', 'logoUrl', 'contactPhone', 'website']) &&
+        data.keys().hasOnly([
+          'institutionId', 'brandName', 'shortName', 'tagline', 'primaryColor', 'secondaryColor',
+          'accentColor', 'lightSurfaceColor', 'logoUrl', 'altLogoUrl', 'founderPhotoUrl',
+          'contactPhone', 'whatsappNumber', 'website', 'email', 'defaultFooterNote',
+          'updatedByUid', 'updatedAt'
+        ]) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.brandName, 140) &&
+        isNonEmptyStr(data.shortName, 64) &&
+        isNonEmptyStr(data.primaryColor, 24) &&
+        isNonEmptyStr(data.accentColor, 24) &&
+        isNonEmptyStr(data.logoUrl, 500) &&
+        isNonEmptyStr(data.contactPhone, 40) &&
+        isNonEmptyStr(data.website, 160) &&
+        (!('tagline' in data) || isStr(data.tagline, 200)) &&
+        (!('secondaryColor' in data) || isStr(data.secondaryColor, 24)) &&
+        (!('lightSurfaceColor' in data) || isStr(data.lightSurfaceColor, 24)) &&
+        (!('altLogoUrl' in data) || isStr(data.altLogoUrl, 500)) &&
+        (!('founderPhotoUrl' in data) || isStr(data.founderPhotoUrl, 500)) &&
+        (!('whatsappNumber' in data) || isStr(data.whatsappNumber, 40)) &&
+        (!('email' in data) || isStr(data.email, 160)) &&
+        (!('defaultFooterNote' in data) || isStr(data.defaultFooterNote, 240)) &&
+        (!('updatedByUid' in data) || isStr(data.updatedByUid, 128)) &&
+        (!('updatedAt' in data) || isStr(data.updatedAt, 40));
+    }
+
+    function isValidGeneratedPoster(data) {
+      return data.keys().hasAll([
+          'title', 'posterType', 'templateStyle', 'sizePreset', 'language', 'headline',
+          'highlights', 'ctaText', 'logoPosition', 'status', 'versionNumber',
+          'createdByUid', 'createdByName', 'institutionId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'courseId', 'courseName', 'courseCode', 'courseCategory', 'isFreeCourse',
+          'title', 'posterType', 'templateStyle', 'sizePreset', 'language', 'headline',
+          'subheadline', 'badgeText', 'highlights', 'feeLabel', 'registrationFeeLabel', 'durationLabel', 'modeLabel',
+          'ctaText', 'footerContact', 'backgroundImageUrl', 'customLogoUrl', 'logoPosition', 'accentColor',
+          'fontScale', 'fontFamily', 'textAlign', 'headlineOffsetY', 'bgOpacity',
+          'socialCaption', 'hashtags', 'whatsappMessage', 'status',
+          'versionNumber', 'contentHash', 'approvedVersionNumber', 'approvedContentHash',
+          'validationPassed', 'validationSummary', 'rejectionReason', 'changeInstructions',
+          'courseSnapshotHash', 'courseSnapshotUpdatedAt', 'campaignId', 'generatedByProvider',
+          'publishDestinations', 'scheduledPublishAt',
+          'createdByUid', 'createdByName', 'createdByRole',
+          'approvedByUid', 'approvedByName', 'approvedAt',
+          'publishedByUid', 'publishedByName', 'publishedAt',
+          'institutionId', 'createdAt', 'updatedAt'
+        ]) &&
+        isNonEmptyStr(data.title, 180) &&
+        isNonEmptyStr(data.posterType, 80) &&
+        data.templateStyle in ['navy_executive', 'electric_tech', 'free_spotlight', 'editorial_minimal'] &&
+        data.sizePreset in ['instagram_square', 'instagram_portrait', 'instagram_story', 'facebook_landscape', 'a4_print', 'website_banner', 'whatsapp_promo'] &&
+        data.language in ['English', 'Tamil', 'Sinhala', 'Arabic'] &&
+        isNonEmptyStr(data.headline, 200) &&
+        data.highlights is list && data.highlights.size() <= 10 &&
+        (data.highlights.size() == 0 || data.highlights[0] is string) &&
+        isNonEmptyStr(data.ctaText, 120) &&
+        data.logoPosition in ['top-left', 'top-right', 'top-center'] &&
+        data.status in ['draft', 'pending_approval', 'changes_requested', 'approved', 'rejected', 'published', 'needs_update', 'archived'] &&
+        isNonNegNum(data.versionNumber) &&
+        isValidId(data.createdByUid) &&
+        isNonEmptyStr(data.createdByName, 120) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.createdAt, 40) &&
+        isNonEmptyStr(data.updatedAt, 40) &&
+        (!('courseId' in data) || isStr(data.courseId, 128)) &&
+        (!('courseName' in data) || isStr(data.courseName, 160)) &&
+        (!('courseCode' in data) || isStr(data.courseCode, 40)) &&
+        (!('courseCategory' in data) || data.courseCategory in ['Certificate', 'Diploma', 'General']) &&
+        (!('isFreeCourse' in data) || data.isFreeCourse is bool) &&
+        (!('subheadline' in data) || isStr(data.subheadline, 320)) &&
+        (!('badgeText' in data) || isStr(data.badgeText, 80)) &&
+        (!('feeLabel' in data) || isStr(data.feeLabel, 120)) &&
+        (!('registrationFeeLabel' in data) || isStr(data.registrationFeeLabel, 120)) &&
+        (!('durationLabel' in data) || isStr(data.durationLabel, 80)) &&
+        (!('modeLabel' in data) || isStr(data.modeLabel, 80)) &&
+        (!('footerContact' in data) || isStr(data.footerContact, 200)) &&
+        (!('backgroundImageUrl' in data) || isStr(data.backgroundImageUrl, 400000)) &&
+        (!('customLogoUrl' in data) || isStr(data.customLogoUrl, 250000)) &&
+        (!('accentColor' in data) || isStr(data.accentColor, 24)) &&
+        (!('fontScale' in data) || isNonNegNum(data.fontScale)) &&
+        (!('fontFamily' in data) || data.fontFamily in ['inter', 'geometric', 'serif', 'mono']) &&
+        (!('textAlign' in data) || data.textAlign in ['left', 'center']) &&
+        (!('headlineOffsetY' in data) || ((data.headlineOffsetY is int || data.headlineOffsetY is float) && data.headlineOffsetY >= -100 && data.headlineOffsetY <= 100)) &&
+        (!('bgOpacity' in data) || ((data.bgOpacity is int || data.bgOpacity is float) && data.bgOpacity >= 0 && data.bgOpacity <= 1)) &&
+        (!('socialCaption' in data) || isStr(data.socialCaption, 2500)) &&
+        (!('hashtags' in data) || (data.hashtags is list && data.hashtags.size() <= 25 && (data.hashtags.size() == 0 || data.hashtags[0] is string))) &&
+        (!('whatsappMessage' in data) || isStr(data.whatsappMessage, 1500)) &&
+        (!('contentHash' in data) || isStr(data.contentHash, 128)) &&
+        (!('approvedVersionNumber' in data) || isNonNegNum(data.approvedVersionNumber)) &&
+        (!('approvedContentHash' in data) || isStr(data.approvedContentHash, 128)) &&
+        (!('validationPassed' in data) || data.validationPassed is bool) &&
+        (!('validationSummary' in data) || isStr(data.validationSummary, 500)) &&
+        (!('rejectionReason' in data) || isStr(data.rejectionReason, 600)) &&
+        (!('changeInstructions' in data) || isStr(data.changeInstructions, 800)) &&
+        (!('courseSnapshotHash' in data) || isStr(data.courseSnapshotHash, 128)) &&
+        (!('courseSnapshotUpdatedAt' in data) || isStr(data.courseSnapshotUpdatedAt, 40)) &&
+        (!('campaignId' in data) || isStr(data.campaignId, 128)) &&
+        (!('generatedByProvider' in data) || isStr(data.generatedByProvider, 64)) &&
+        (!('publishDestinations' in data) || (data.publishDestinations is list && data.publishDestinations.size() <= 10 && (data.publishDestinations.size() == 0 || data.publishDestinations[0] is string))) &&
+        (!('scheduledPublishAt' in data) || isStr(data.scheduledPublishAt, 40)) &&
+        (!('createdByRole' in data) || isStr(data.createdByRole, 40)) &&
+        (!('approvedByUid' in data) || isStr(data.approvedByUid, 128)) &&
+        (!('approvedByName' in data) || isStr(data.approvedByName, 120)) &&
+        (!('approvedAt' in data) || isStr(data.approvedAt, 40)) &&
+        (!('publishedByUid' in data) || isStr(data.publishedByUid, 128)) &&
+        (!('publishedByName' in data) || isStr(data.publishedByName, 120)) &&
+        (!('publishedAt' in data) || isStr(data.publishedAt, 40));
+    }
+
+    function isValidPosterVersion(data) {
+      return data.keys().hasAll([
+          'posterId', 'versionNumber', 'headline', 'templateStyle', 'sizePreset',
+          'language', 'highlights', 'ctaText', 'createdByUid', 'createdByName', 'institutionId', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'posterId', 'versionNumber', 'headline', 'subheadline', 'templateStyle', 'sizePreset',
+          'language', 'highlights', 'ctaText', 'socialCaption', 'contentHash',
+          'validationPassed', 'validationSummary', 'editableDesignDataJson', 'changeNote',
+          'createdByUid', 'createdByName', 'institutionId', 'createdAt'
+        ]) &&
+        isValidId(data.posterId) &&
+        isNonNegNum(data.versionNumber) &&
+        isNonEmptyStr(data.headline, 200) &&
+        isNonEmptyStr(data.templateStyle, 40) &&
+        isNonEmptyStr(data.sizePreset, 40) &&
+        isNonEmptyStr(data.language, 24) &&
+        data.highlights is list && data.highlights.size() <= 10 &&
+        (data.highlights.size() == 0 || data.highlights[0] is string) &&
+        isNonEmptyStr(data.ctaText, 120) &&
+        isValidId(data.createdByUid) &&
+        isNonEmptyStr(data.createdByName, 120) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.createdAt, 40) &&
+        (!('subheadline' in data) || isStr(data.subheadline, 320)) &&
+        (!('socialCaption' in data) || isStr(data.socialCaption, 2500)) &&
+        (!('contentHash' in data) || isStr(data.contentHash, 128)) &&
+        (!('validationPassed' in data) || data.validationPassed is bool) &&
+        (!('validationSummary' in data) || isStr(data.validationSummary, 500)) &&
+        (!('editableDesignDataJson' in data) || isStr(data.editableDesignDataJson, 12000)) &&
+        (!('changeNote' in data) || isStr(data.changeNote, 400));
+    }
+
+    function isValidPosterApprovalLog(data) {
+      return data.keys().hasAll([
+          'posterId', 'versionNumber', 'action', 'performedByUid', 'performedByName',
+          'performedByEmail', 'institutionId', 'timestamp'
+        ]) &&
+        data.keys().hasOnly([
+          'posterId', 'posterTitle', 'courseName', 'versionNumber', 'action', 'reason',
+          'performedByUid', 'performedByName', 'performedByEmail', 'institutionId', 'timestamp'
+        ]) &&
+        isValidId(data.posterId) &&
+        isNonNegNum(data.versionNumber) &&
+        data.action in ['submitted_for_approval', 'approved', 'rejected', 'changes_requested', 'approval_invalidated', 'archived'] &&
+        isValidId(data.performedByUid) &&
+        isNonEmptyStr(data.performedByName, 120) &&
+        isNonEmptyStr(data.performedByEmail, 160) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.timestamp, 40) &&
+        (!('posterTitle' in data) || isStr(data.posterTitle, 180)) &&
+        (!('courseName' in data) || isStr(data.courseName, 160)) &&
+        (!('reason' in data) || isStr(data.reason, 800));
+    }
+
+    function isValidPosterPublishingLog(data) {
+      return data.keys().hasAll([
+          'posterId', 'versionNumber', 'destination', 'publishedByUid', 'publishedByName',
+          'publishedByEmail', 'institutionId', 'timestamp'
+        ]) &&
+        data.keys().hasOnly([
+          'posterId', 'posterTitle', 'courseId', 'versionNumber', 'destination', 'scheduledFor',
+          'publishedByUid', 'publishedByName', 'publishedByEmail', 'institutionId', 'timestamp'
+        ]) &&
+        isValidId(data.posterId) &&
+        isNonNegNum(data.versionNumber) &&
+        data.destination in ['website_marketing_library', 'public_course_page', 'download_png', 'download_jpg', 'download_pdf', 'export_whatsapp', 'export_social_media', 'scheduled_campaign'] &&
+        isValidId(data.publishedByUid) &&
+        isNonEmptyStr(data.publishedByName, 120) &&
+        isNonEmptyStr(data.publishedByEmail, 160) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.timestamp, 40) &&
+        (!('posterTitle' in data) || isStr(data.posterTitle, 180)) &&
+        (!('courseId' in data) || isStr(data.courseId, 128)) &&
+        (!('scheduledFor' in data) || isStr(data.scheduledFor, 40));
+    }
+
+    function isValidMarketingCampaign(data) {
+      return data.keys().hasAll([
+          'name', 'campaignType', 'courseIds', 'posterIds', 'language', 'status',
+          'createdByUid', 'createdByName', 'institutionId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'name', 'campaignType', 'courseIds', 'posterIds', 'language', 'status',
+          'summary', 'createdByUid', 'createdByName', 'institutionId', 'createdAt', 'updatedAt'
+        ]) &&
+        isNonEmptyStr(data.name, 160) &&
+        data.campaignType in ['free_courses', 'certificate_intake', 'diploma_intake', 'custom_bulk'] &&
+        data.courseIds is list && data.courseIds.size() <= 100 &&
+        (data.courseIds.size() == 0 || data.courseIds[0] is string) &&
+        data.posterIds is list && data.posterIds.size() <= 100 &&
+        (data.posterIds.size() == 0 || data.posterIds[0] is string) &&
+        data.language in ['English', 'Tamil', 'Sinhala', 'Arabic'] &&
+        data.status in ['draft', 'pending_approval', 'approved', 'published', 'archived'] &&
+        isValidId(data.createdByUid) &&
+        isNonEmptyStr(data.createdByName, 120) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.createdAt, 40) &&
+        isNonEmptyStr(data.updatedAt, 40) &&
+        (!('summary' in data) || isStr(data.summary, 800));
+    }
+
+    function isValidIntegrationConfig(data) {
+      return data.keys().hasAll(['provider', 'label', 'category', 'enabled', 'connectionStatus', 'institutionId']) &&
+        data.keys().hasOnly([
+          'provider', 'label', 'category', 'enabled', 'defaultModel', 'temperature',
+          'maxTokens', 'monthlyBudgetUsd', 'allowedFeatures', 'defaultActorId',
+          'connectionStatus', 'lastTestedAt', 'lastError', 'notes', 'updatedByUid',
+          'institutionId', 'updatedAt'
+        ]) &&
+        data.provider in ['openai', 'apify', 'gemini_ai', 'google_sheets', 'firebase', 'email_provider', 'whatsapp_business', 'analytics'] &&
+        isNonEmptyStr(data.label, 120) &&
+        isNonEmptyStr(data.category, 64) &&
+        data.enabled is bool &&
+        data.connectionStatus in ['not_configured', 'connected', 'error', 'testing'] &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        (!('defaultModel' in data) || isStr(data.defaultModel, 80)) &&
+        (!('temperature' in data) || isNonNegNum(data.temperature)) &&
+        (!('maxTokens' in data) || isNonNegNum(data.maxTokens)) &&
+        (!('monthlyBudgetUsd' in data) || isNonNegNum(data.monthlyBudgetUsd)) &&
+        (!('allowedFeatures' in data) || (data.allowedFeatures is list && data.allowedFeatures.size() <= 20 && (data.allowedFeatures.size() == 0 || data.allowedFeatures[0] is string))) &&
+        (!('defaultActorId' in data) || isStr(data.defaultActorId, 120)) &&
+        (!('lastTestedAt' in data) || isStr(data.lastTestedAt, 40)) &&
+        (!('lastError' in data) || isStr(data.lastError, 400)) &&
+        (!('notes' in data) || isStr(data.notes, 600)) &&
+        (!('updatedByUid' in data) || isStr(data.updatedByUid, 128)) &&
+        (!('updatedAt' in data) || isStr(data.updatedAt, 40));
+    }
+
+    function isValidIntegrationLog(data) {
+      return data.keys().hasAll(['provider', 'action', 'status', 'summary', 'actorUid', 'actorEmail', 'institutionId', 'createdAt']) &&
+        data.keys().hasOnly([
+          'provider', 'action', 'status', 'modelOrActor', 'durationMs',
+          'summary', 'actorUid', 'actorEmail', 'institutionId', 'createdAt'
+        ]) &&
+        isNonEmptyStr(data.provider, 40) &&
+        isNonEmptyStr(data.action, 80) &&
+        data.status in ['success', 'error', 'not_configured'] &&
+        isNonEmptyStr(data.summary, 500) &&
+        isValidId(data.actorUid) &&
+        isNonEmptyStr(data.actorEmail, 160) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.createdAt, 40) &&
+        (!('modelOrActor' in data) || isStr(data.modelOrActor, 120)) &&
+        (!('durationMs' in data) || isNonNegNum(data.durationMs));
+    }
+
+    function isValidApifyRun(data) {
+      return data.keys().hasAll(['actorId', 'runId', 'purpose', 'status', 'startedByUid', 'startedByEmail', 'institutionId', 'createdAt']) &&
+        data.keys().hasOnly([
+          'actorId', 'runId', 'datasetId', 'purpose', 'status', 'itemCount',
+          'previewJson', 'reviewedByUid', 'startedByUid', 'startedByEmail',
+          'institutionId', 'createdAt', 'updatedAt'
+        ]) &&
+        isNonEmptyStr(data.actorId, 120) &&
+        isNonEmptyStr(data.runId, 120) &&
+        isNonEmptyStr(data.purpose, 200) &&
+        data.status in ['RUNNING', 'SUCCEEDED', 'FAILED', 'ABORTED', 'QUEUED'] &&
+        isValidId(data.startedByUid) &&
+        isNonEmptyStr(data.startedByEmail, 160) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.createdAt, 40) &&
+        (!('datasetId' in data) || isStr(data.datasetId, 120)) &&
+        (!('itemCount' in data) || isNonNegNum(data.itemCount)) &&
+        (!('previewJson' in data) || isStr(data.previewJson, 12000)) &&
+        (!('reviewedByUid' in data) || isStr(data.reviewedByUid, 128)) &&
+        (!('updatedAt' in data) || isStr(data.updatedAt, 40));
+    }
+
+    function isValidAutomationWorkflow(data) {
+      return data.keys().hasAll([
+          'workflowKey', 'name', 'description', 'enabled', 'requiresAdminApproval',
+          'defaultLanguage', 'defaultSizePreset', 'institutionId'
+        ]) &&
+        data.keys().hasOnly([
+          'workflowKey', 'name', 'description', 'enabled', 'requiresAdminApproval',
+          'defaultLanguage', 'defaultSizePreset', 'lastTriggeredAt', 'lastRunSummary',
+          'institutionId', 'updatedAt'
+        ]) &&
+        data.workflowKey in ['new_course_poster', 'course_update_detector', 'free_course_campaign', 'bulk_campaign_package'] &&
+        isNonEmptyStr(data.name, 120) &&
+        isNonEmptyStr(data.description, 500) &&
+        data.enabled is bool &&
+        data.requiresAdminApproval is bool &&
+        data.defaultLanguage in ['English', 'Tamil', 'Sinhala', 'Arabic'] &&
+        isNonEmptyStr(data.defaultSizePreset, 40) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        (!('lastTriggeredAt' in data) || isStr(data.lastTriggeredAt, 40)) &&
+        (!('lastRunSummary' in data) || isStr(data.lastRunSummary, 400)) &&
+        (!('updatedAt' in data) || isStr(data.updatedAt, 40));
     }
 
     // 4. COLLECTION RULES
@@ -1256,6 +1575,14 @@ service cloud.firestore {
           incoming().read == false &&
           'category' in incoming() &&
           incoming().category == 'programme_enquiry'
+        ) ||
+        (
+          isVerifiedUser() &&
+          isLecturer() &&
+          incoming().userId == 'super-admin-inbox' &&
+          incoming().read == false &&
+          'category' in incoming() &&
+          incoming().category == 'Poster Governance'
         )
       );
       allow update: if isValidId(notificationId) && isVerifiedUser() && isValidNotification(incoming()) &&
@@ -1460,6 +1787,279 @@ service cloud.firestore {
           'completedTrackableItems', 'progressPercent', 'updatedAt'
         ]);
       allow delete: if isValidId(progressId) && isSuperAdminOwner();
+    }
+
+    // MODULE 3: BRAND SETTINGS, AI POSTER AUTOMATION & MARKETING CAMPAIGNS
+    match /brandSettings/{institutionId} {
+      allow get: if isValidId(institutionId);
+      allow list: if isSuperAdminOwner();
+      allow create, update: if isValidId(institutionId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER']) && isValidBrandSettings(incoming());
+      allow delete: if false;
+    }
+
+    match /generatedPosters/{posterId} {
+      allow get: if isValidId(posterId) && (
+        resource.data.status == 'published' ||
+        hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER', 'BRANCH_MANAGER']) ||
+        (isLecturer() && resource.data.createdByUid == request.auth.uid)
+      );
+      allow list: if resource.data.status == 'published' || isSuperAdminOwner() || (isVerifiedUser() && resource.data.createdByUid == request.auth.uid);
+      // Creation NEVER allows direct approval or publishing — must start as draft or pending_approval
+      allow create: if isValidId(posterId) &&
+        (hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER', 'BRANCH_MANAGER']) || isLecturer()) &&
+        isValidGeneratedPoster(incoming()) &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().status in ['draft', 'pending_approval'] &&
+        (!('approvedVersionNumber' in incoming()) || incoming().approvedVersionNumber == 0) &&
+        (!('approvedByUid' in incoming()) || incoming().approvedByUid == '') &&
+        (!('publishedByUid' in incoming()) || incoming().publishedByUid == '');
+      // Updates enforce strict approval -> publishing state machine:
+      // - Only Super Admin Owner can approve, reject, request changes, publish, or archive.
+      // - Publishing REQUIRES existing().status in ['approved', 'published'], matching approvedVersionNumber & approvedContentHash, and validationPassed == true.
+      // - Modifying contentHash of an approved/published poster MUST increment versionNumber, drop status to draft/pending_approval/needs_update, and clear approvedVersionNumber & approvedContentHash.
+      // - Non-Super-Admin creators (Branch Admin, Marketing Staff, Lecturer) can only edit their own non-published drafts/changes_requested and submit for pending_approval.
+      allow update: if isValidId(posterId) && isValidGeneratedPoster(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().createdByUid == existing().createdByUid && (
+        (
+          isSuperAdminOwner() && (
+            // If poster was already approved/published and contentHash changes (not archiving), force new version & invalidate prior approval
+            !(existing().status in ['approved', 'published']) ||
+            incoming().status == 'archived' ||
+            (
+              'approvedContentHash' in existing() &&
+              incoming().contentHash == existing().approvedContentHash
+            ) ||
+            (
+              incoming().versionNumber > existing().versionNumber &&
+              incoming().status in ['draft', 'pending_approval', 'needs_update'] &&
+              (!('approvedVersionNumber' in incoming()) || incoming().approvedVersionNumber == 0) &&
+              (!('approvedContentHash' in incoming()) || incoming().approvedContentHash == '')
+            )
+          ) && (
+            incoming().status != 'published' || (
+              existing().status in ['approved', 'published'] &&
+              incoming().validationPassed == true &&
+              'approvedVersionNumber' in existing() &&
+              incoming().versionNumber == existing().approvedVersionNumber &&
+              'approvedContentHash' in existing() &&
+              incoming().contentHash == existing().approvedContentHash &&
+              'publishedByUid' in incoming() &&
+              incoming().publishedByUid == request.auth.uid
+            )
+          )
+        ) || (
+          (hasStaffRole(['ADMIN', 'CONTENT_MANAGER', 'BRANCH_MANAGER']) || isLecturer()) &&
+          existing().createdByUid == request.auth.uid &&
+          existing().status in ['draft', 'changes_requested', 'rejected', 'needs_update'] &&
+          incoming().status in ['draft', 'pending_approval'] &&
+          (!('approvedVersionNumber' in incoming()) || incoming().approvedVersionNumber == 0) &&
+          (!('approvedByUid' in incoming()) || incoming().approvedByUid == '') &&
+          (!('publishedByUid' in incoming()) || incoming().publishedByUid == '')
+        )
+      );
+      allow delete: if isValidId(posterId) && isSuperAdminOwner() && existing().status != 'published';
+    }
+
+    match /posterVersions/{versionId} {
+      allow get: if isValidId(versionId) && (
+        hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER', 'BRANCH_MANAGER']) ||
+        (isLecturer() && resource.data.createdByUid == request.auth.uid)
+      );
+      allow list: if isSuperAdminOwner() || (isVerifiedUser() && resource.data.createdByUid == request.auth.uid);
+      allow create: if isValidId(versionId) &&
+        (hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER', 'BRANCH_MANAGER']) || isLecturer()) &&
+        isValidPosterVersion(incoming()) &&
+        incoming().createdByUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /posterApprovalLogs/{logId} {
+      allow get: if isValidId(logId) && (
+        hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER', 'BRANCH_MANAGER']) ||
+        (isLecturer() && resource.data.performedByUid == request.auth.uid)
+      );
+      allow list: if isSuperAdminOwner() || (isVerifiedUser() && resource.data.performedByUid == request.auth.uid);
+      allow create: if isValidId(logId) && isVerifiedUser() && isValidPosterApprovalLog(incoming()) &&
+        incoming().performedByUid == request.auth.uid && (
+          isSuperAdminOwner() ||
+          ((hasStaffRole(['ADMIN', 'CONTENT_MANAGER', 'BRANCH_MANAGER']) || isLecturer()) && incoming().action in ['submitted_for_approval', 'approval_invalidated'])
+        );
+      allow update, delete: if false;
+    }
+
+    match /posterPublishingLogs/{logId} {
+      allow get: if isValidId(logId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER']);
+      allow list: if isSuperAdminOwner();
+      allow create: if isValidId(logId) && isSuperAdminOwner() && isValidPosterPublishingLog(incoming()) &&
+        incoming().publishedByUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /marketingCampaigns/{campaignId} {
+      allow get: if isValidId(campaignId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER']);
+      allow list: if isSuperAdminOwner() || (isVerifiedUser() && resource.data.createdByUid == request.auth.uid);
+      allow create, update: if isValidId(campaignId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER']) && isValidMarketingCampaign(incoming());
+      allow delete: if isValidId(campaignId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+
+    // MODULE 4: CENTRALIZED AI INTEGRATIONS & AUTOMATION WORKFLOWS (Strictly Super Admin only)
+    match /integrations/{providerId} {
+      allow get: if isValidId(providerId) && isSuperAdminOwner();
+      allow list: if isSuperAdminOwner();
+      allow create, update: if isValidId(providerId) && isSuperAdminOwner() && isValidIntegrationConfig(incoming()) && incoming().provider == providerId;
+      allow delete: if false;
+    }
+
+    match /integrationLogs/{logId} {
+      allow get: if isValidId(logId) && isSuperAdminOwner();
+      allow list: if isSuperAdminOwner();
+      allow create: if isValidId(logId) && isSuperAdminOwner() && isValidIntegrationLog(incoming()) && incoming().actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /apifyRuns/{runId} {
+      allow get: if isValidId(runId) && isSuperAdminOwner();
+      allow list: if isSuperAdminOwner();
+      allow create, update: if isValidId(runId) && isSuperAdminOwner() && isValidApifyRun(incoming());
+      allow delete: if isValidId(runId) && isSuperAdminOwner();
+    }
+
+    match /automationWorkflows/{workflowId} {
+      allow get: if isValidId(workflowId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER']);
+      allow list: if isSuperAdminOwner();
+      allow create, update: if isValidId(workflowId) && isSuperAdminOwner() && isValidAutomationWorkflow(incoming()) && incoming().workflowKey == workflowId;
+      allow delete: if false;
+    }
+
+    // MODULE 5: STUDENT ACCOUNT MANAGEMENT, EMAIL LOGS & SYLLABUS APPROVAL LOGS
+    function isValidStudentAccount(data) {
+      return data.keys().hasAll([
+          'studentId', 'username', 'fullName', 'email', 'status',
+          'mustChangePassword', 'createdByUid', 'createdByEmail',
+          'institutionId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'studentId', 'username', 'fullName', 'email', 'phone',
+          'courseId', 'courseName', 'batchName', 'branchId',
+          'linkedUserUid', 'linkedMigratedId', 'status', 'mustChangePassword',
+          'invitationSentAt', 'invitationCount', 'passwordUpdatedAt', 'lastLoginAt',
+          'createdByUid', 'createdByEmail', 'institutionId', 'createdAt', 'updatedAt'
+        ]) &&
+        isNonEmptyStr(data.studentId, 40) &&
+        isNonEmptyStr(data.username, 80) &&
+        isNonEmptyStr(data.fullName, 140) &&
+        isNonEmptyStr(data.email, 160) &&
+        data.status in ['Not Created', 'Invitation Sent', 'Active', 'Suspended', 'Password Reset Required'] &&
+        data.mustChangePassword is bool &&
+        isValidId(data.createdByUid) &&
+        isNonEmptyStr(data.createdByEmail, 160) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.createdAt, 40) &&
+        isNonEmptyStr(data.updatedAt, 40) &&
+        (!('phone' in data) || isStr(data.phone, 40)) &&
+        (!('courseId' in data) || isStr(data.courseId, 128)) &&
+        (!('courseName' in data) || isStr(data.courseName, 160)) &&
+        (!('batchName' in data) || isStr(data.batchName, 120)) &&
+        (!('branchId' in data) || isStr(data.branchId, 64)) &&
+        (!('linkedUserUid' in data) || isStr(data.linkedUserUid, 128)) &&
+        (!('linkedMigratedId' in data) || isStr(data.linkedMigratedId, 128)) &&
+        (!('invitationSentAt' in data) || isStr(data.invitationSentAt, 40)) &&
+        (!('invitationCount' in data) || isNonNegNum(data.invitationCount)) &&
+        (!('passwordUpdatedAt' in data) || isStr(data.passwordUpdatedAt, 40)) &&
+        (!('lastLoginAt' in data) || isStr(data.lastLoginAt, 40));
+    }
+
+    function isValidEmailLog(data) {
+      return data.keys().hasAll([
+          'emailType', 'recipientEmail', 'subject', 'bodyPreview', 'provider',
+          'status', 'retryCount', 'sentByUid', 'sentByEmail', 'institutionId', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'emailType', 'recipientEmail', 'recipientName', 'studentId', 'courseId',
+          'subject', 'bodyPreview', 'provider', 'status', 'errorMessage', 'retryCount',
+          'sentByUid', 'sentByEmail', 'institutionId', 'sentAt', 'createdAt'
+        ]) &&
+        data.emailType in ['student_account_created', 'login_credentials', 'password_reset', 'admission_confirmation', 'syllabus_updated', 'academic_announcement'] &&
+        isNonEmptyStr(data.recipientEmail, 160) &&
+        isNonEmptyStr(data.subject, 240) &&
+        isNonEmptyStr(data.bodyPreview, 1200) &&
+        data.provider in ['resend', 'smtp', 'sandbox_outbox'] &&
+        data.status in ['sent', 'failed', 'queued_configure_provider'] &&
+        isNonNegNum(data.retryCount) &&
+        isValidId(data.sentByUid) &&
+        isNonEmptyStr(data.sentByEmail, 160) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.createdAt, 40) &&
+        (!('recipientName' in data) || isStr(data.recipientName, 140)) &&
+        (!('studentId' in data) || isStr(data.studentId, 40)) &&
+        (!('courseId' in data) || isStr(data.courseId, 128)) &&
+        (!('errorMessage' in data) || isStr(data.errorMessage, 500)) &&
+        (!('sentAt' in data) || isStr(data.sentAt, 40));
+    }
+
+    function isValidSyllabusApprovalLog(data) {
+      return data.keys().hasAll([
+          'syllabusId', 'courseId', 'courseName', 'previousVersionNumber', 'versionNumber',
+          'action', 'changeDescription', 'performedByUid', 'performedByName', 'performedByEmail',
+          'institutionId', 'timestamp'
+        ]) &&
+        data.keys().hasOnly([
+          'syllabusId', 'courseId', 'courseName', 'previousVersionNumber', 'versionNumber',
+          'action', 'changeDescription', 'performedByUid', 'performedByName', 'performedByEmail',
+          'institutionId', 'timestamp'
+        ]) &&
+        isNonEmptyStr(data.syllabusId, 128) &&
+        isNonEmptyStr(data.courseId, 128) &&
+        isNonEmptyStr(data.courseName, 160) &&
+        isNonNegNum(data.previousVersionNumber) &&
+        isNonNegNum(data.versionNumber) &&
+        data.action in ['submitted_for_approval', 'approved', 'published', 'archived', 'restored', 'rejected'] &&
+        isNonEmptyStr(data.changeDescription, 600) &&
+        isValidId(data.performedByUid) &&
+        isNonEmptyStr(data.performedByName, 120) &&
+        isNonEmptyStr(data.performedByEmail, 160) &&
+        isNonEmptyStr(data.institutionId, 64) &&
+        isNonEmptyStr(data.timestamp, 40);
+    }
+
+    match /studentAccounts/{accountId} {
+      allow get: if isValidId(accountId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN']);
+      allow list: if isSuperAdminOwner() || hasStaffRole(['SUPER_ADMIN', 'ADMIN']);
+      allow create: if isValidId(accountId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN']) &&
+        isValidStudentAccount(incoming()) && incoming().createdByUid == request.auth.uid;
+      allow update: if isValidId(accountId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN']) &&
+        isValidStudentAccount(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().createdByUid == existing().createdByUid;
+      allow delete: if isValidId(accountId) && isSuperAdminOwner();
+    }
+
+    match /emailLogs/{logId} {
+      allow get: if isValidId(logId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'ACADEMIC_MANAGER', 'ADMISSION_OFFICER']);
+      allow list: if isSuperAdminOwner() || hasStaffRole(['SUPER_ADMIN', 'ADMIN']);
+      allow create: if isValidId(logId) &&
+        hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'ACADEMIC_MANAGER', 'ADMISSION_OFFICER']) &&
+        isValidEmailLog(incoming()) && incoming().sentByUid == request.auth.uid;
+      allow update: if isValidId(logId) && hasStaffRole(['SUPER_ADMIN', 'ADMIN']) &&
+        isValidEmailLog(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().sentByUid == existing().sentByUid &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'provider', 'errorMessage', 'retryCount', 'sentAt']);
+      allow delete: if false;
+    }
+
+    match /syllabusApprovalLogs/{logId} {
+      allow get: if isValidId(logId) && (
+        hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'ACADEMIC_MANAGER']) ||
+        (isLecturer() && resource.data.performedByUid == request.auth.uid)
+      );
+      allow list: if isSuperAdminOwner() || (isVerifiedUser() && resource.data.performedByUid == request.auth.uid);
+      allow create: if isValidId(logId) &&
+        (hasStaffRole(['SUPER_ADMIN', 'ADMIN', 'ACADEMIC_MANAGER']) || isLecturer()) &&
+        isValidSyllabusApprovalLog(incoming()) &&
+        incoming().performedByUid == request.auth.uid;
+      allow update, delete: if false;
     }
   }
 }

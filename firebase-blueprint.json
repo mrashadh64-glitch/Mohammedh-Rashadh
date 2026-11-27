@@ -147,6 +147,18 @@
         "startDate": { "type": "string", "maxLength": 32 },
         "endDate": { "type": "string", "maxLength": 32 },
         "maxStudents": { "type": "number" },
+        "slug": { "type": "string", "maxLength": 140 },
+        "bannerUrl": { "type": "string", "maxLength": 600 },
+        "feeConfigured": { "type": "boolean" },
+        "isFree": { "type": "boolean" },
+        "currency": { "type": "string", "maxLength": 12 },
+        "courseLanguage": { "type": "string", "maxLength": 64 },
+        "branchIds": { "type": "array" },
+        "admissionStatus": { "type": "string", "enum": ["open", "closing_soon", "closed", "upcoming"] },
+        "academicYear": { "type": "string", "maxLength": 16 },
+        "featured": { "type": "boolean" },
+        "seoTitle": { "type": "string", "maxLength": 180 },
+        "seoDescription": { "type": "string", "maxLength": 360 },
         "entryRequirements": { "type": "string", "maxLength": 400 },
         "learningOutcomes": { "type": "array" },
         "syllabusTopics": { "type": "array" },
@@ -801,6 +813,7 @@
       "properties": {
         "fileName": { "type": "string", "maxLength": 200 },
         "sheetName": { "type": "string", "maxLength": 120 },
+        "batchFingerprint": { "type": "string", "maxLength": 128 },
         "totalRows": { "type": "number" },
         "importedCount": { "type": "number" },
         "mergedCount": { "type": "number" },
@@ -901,6 +914,335 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "courseId", "syllabusId", "completedModuleIds", "completedTopicIds", "completedActivityIds", "completedAssignmentIds", "totalTrackableItems", "completedTrackableItems", "progressPercent", "institutionId", "updatedAt"]
+    },
+    "BrandSettings": {
+      "title": "Institute Brand Settings",
+      "description": "Centralized colors, typography, logos, and contact details applied across automated posters and marketing assets.",
+      "type": "object",
+      "properties": {
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "brandName": { "type": "string", "maxLength": 140 },
+        "shortName": { "type": "string", "maxLength": 64 },
+        "tagline": { "type": "string", "maxLength": 200 },
+        "primaryColor": { "type": "string", "maxLength": 24 },
+        "secondaryColor": { "type": "string", "maxLength": 24 },
+        "accentColor": { "type": "string", "maxLength": 24 },
+        "lightSurfaceColor": { "type": "string", "maxLength": 24 },
+        "logoUrl": { "type": "string", "maxLength": 500 },
+        "altLogoUrl": { "type": "string", "maxLength": 500 },
+        "founderPhotoUrl": { "type": "string", "maxLength": 500 },
+        "contactPhone": { "type": "string", "maxLength": 40 },
+        "whatsappNumber": { "type": "string", "maxLength": 40 },
+        "website": { "type": "string", "maxLength": 160 },
+        "email": { "type": "string", "maxLength": 160 },
+        "defaultFooterNote": { "type": "string", "maxLength": 240 },
+        "updatedByUid": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["institutionId", "brandName", "shortName", "primaryColor", "accentColor", "logoUrl", "contactPhone", "website"]
+    },
+    "GeneratedPoster": {
+      "title": "AI Generated Course Poster",
+      "description": "Template-rendered course marketing poster with approval workflow, multi-language copy, and social captions.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "courseCode": { "type": "string", "maxLength": 40 },
+        "courseCategory": { "type": "string", "enum": ["Certificate", "Diploma", "General"] },
+        "isFreeCourse": { "type": "boolean" },
+        "title": { "type": "string", "maxLength": 180 },
+        "posterType": { "type": "string", "maxLength": 80 },
+        "templateStyle": { "type": "string", "enum": ["navy_executive", "electric_tech", "free_spotlight", "editorial_minimal"] },
+        "sizePreset": { "type": "string", "enum": ["instagram_square", "instagram_portrait", "instagram_story", "facebook_landscape", "a4_print", "website_banner"] },
+        "language": { "type": "string", "enum": ["English", "Tamil", "Sinhala", "Arabic"] },
+        "headline": { "type": "string", "maxLength": 200 },
+        "subheadline": { "type": "string", "maxLength": 320 },
+        "badgeText": { "type": "string", "maxLength": 80 },
+        "highlights": { "type": "array" },
+        "feeLabel": { "type": "string", "maxLength": 120 },
+        "durationLabel": { "type": "string", "maxLength": 80 },
+        "modeLabel": { "type": "string", "maxLength": 80 },
+        "ctaText": { "type": "string", "maxLength": 120 },
+        "footerContact": { "type": "string", "maxLength": 200 },
+        "backgroundImageUrl": { "type": "string", "maxLength": 600 },
+        "logoPosition": { "type": "string", "enum": ["top-left", "top-right", "top-center"] },
+        "accentColor": { "type": "string", "maxLength": 24 },
+        "fontScale": { "type": "number" },
+        "socialCaption": { "type": "string", "maxLength": 2500 },
+        "hashtags": { "type": "array" },
+        "whatsappMessage": { "type": "string", "maxLength": 1500 },
+        "status": { "type": "string", "enum": ["draft", "pending_approval", "changes_requested", "approved", "rejected", "published", "needs_update", "archived"] },
+        "versionNumber": { "type": "number" },
+        "contentHash": { "type": "string", "maxLength": 128 },
+        "approvedVersionNumber": { "type": "number" },
+        "approvedContentHash": { "type": "string", "maxLength": 128 },
+        "validationPassed": { "type": "boolean" },
+        "validationSummary": { "type": "string", "maxLength": 500 },
+        "rejectionReason": { "type": "string", "maxLength": 600 },
+        "changeInstructions": { "type": "string", "maxLength": 800 },
+        "courseSnapshotHash": { "type": "string", "maxLength": 128 },
+        "courseSnapshotUpdatedAt": { "type": "string", "maxLength": 40 },
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "generatedByProvider": { "type": "string", "maxLength": 64 },
+        "publishDestinations": { "type": "array" },
+        "scheduledPublishAt": { "type": "string", "maxLength": 40 },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 120 },
+        "createdByRole": { "type": "string", "maxLength": 40 },
+        "approvedByUid": { "type": "string", "maxLength": 128 },
+        "approvedByName": { "type": "string", "maxLength": 120 },
+        "approvedAt": { "type": "string", "maxLength": 40 },
+        "publishedByUid": { "type": "string", "maxLength": 128 },
+        "publishedByName": { "type": "string", "maxLength": 120 },
+        "publishedAt": { "type": "string", "maxLength": 40 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "posterType", "templateStyle", "sizePreset", "language", "headline", "highlights", "ctaText", "logoPosition", "status", "versionNumber", "createdByUid", "createdByName", "institutionId", "createdAt", "updatedAt"]
+    },
+    "PosterVersion": {
+      "title": "Immutable Poster Version Snapshot",
+      "description": "Historical snapshot of a generated poster saved whenever edits or course-triggered regenerations occur.",
+      "type": "object",
+      "properties": {
+        "posterId": { "type": "string", "maxLength": 128 },
+        "versionNumber": { "type": "number" },
+        "headline": { "type": "string", "maxLength": 200 },
+        "subheadline": { "type": "string", "maxLength": 320 },
+        "templateStyle": { "type": "string", "maxLength": 40 },
+        "sizePreset": { "type": "string", "maxLength": 40 },
+        "language": { "type": "string", "maxLength": 24 },
+        "highlights": { "type": "array" },
+        "ctaText": { "type": "string", "maxLength": 120 },
+        "socialCaption": { "type": "string", "maxLength": 2500 },
+        "contentHash": { "type": "string", "maxLength": 128 },
+        "validationPassed": { "type": "boolean" },
+        "validationSummary": { "type": "string", "maxLength": 500 },
+        "editableDesignDataJson": { "type": "string", "maxLength": 12000 },
+        "changeNote": { "type": "string", "maxLength": 400 },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 120 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["posterId", "versionNumber", "headline", "templateStyle", "sizePreset", "language", "highlights", "ctaText", "createdByUid", "createdByName", "institutionId", "createdAt"]
+    },
+    "PosterApprovalLog": {
+      "title": "Immutable Poster Approval Audit Log",
+      "description": "Append-only governance log recording every submission, approval, rejection, change request, and approval invalidation.",
+      "type": "object",
+      "properties": {
+        "posterId": { "type": "string", "maxLength": 128 },
+        "posterTitle": { "type": "string", "maxLength": 180 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "versionNumber": { "type": "number" },
+        "action": { "type": "string", "enum": ["submitted_for_approval", "approved", "rejected", "changes_requested", "approval_invalidated", "archived"] },
+        "reason": { "type": "string", "maxLength": 800 },
+        "performedByUid": { "type": "string", "maxLength": 128 },
+        "performedByName": { "type": "string", "maxLength": 120 },
+        "performedByEmail": { "type": "string", "maxLength": 160 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["posterId", "versionNumber", "action", "performedByUid", "performedByName", "performedByEmail", "institutionId", "timestamp"]
+    },
+    "PosterPublishingLog": {
+      "title": "Immutable Poster Publishing Audit Log",
+      "description": "Append-only audit log recording every authorized publishing or export destination for an approved poster version.",
+      "type": "object",
+      "properties": {
+        "posterId": { "type": "string", "maxLength": 128 },
+        "posterTitle": { "type": "string", "maxLength": 180 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "versionNumber": { "type": "number" },
+        "destination": { "type": "string", "enum": ["website_marketing_library", "public_course_page", "download_png", "download_jpg", "download_pdf", "export_whatsapp", "export_social_media", "scheduled_campaign"] },
+        "scheduledFor": { "type": "string", "maxLength": 40 },
+        "publishedByUid": { "type": "string", "maxLength": 128 },
+        "publishedByName": { "type": "string", "maxLength": 120 },
+        "publishedByEmail": { "type": "string", "maxLength": 160 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["posterId", "versionNumber", "destination", "publishedByUid", "publishedByName", "publishedByEmail", "institutionId", "timestamp"]
+    },
+    "MarketingCampaign": {
+      "title": "Marketing Campaign Package",
+      "description": "Grouped campaign of course posters, captions, and approvals.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 160 },
+        "campaignType": { "type": "string", "enum": ["free_courses", "certificate_intake", "diploma_intake", "custom_bulk"] },
+        "courseIds": { "type": "array" },
+        "posterIds": { "type": "array" },
+        "language": { "type": "string", "enum": ["English", "Tamil", "Sinhala", "Arabic"] },
+        "status": { "type": "string", "enum": ["draft", "pending_approval", "approved", "published", "archived"] },
+        "summary": { "type": "string", "maxLength": 800 },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 120 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "campaignType", "courseIds", "posterIds", "language", "status", "createdByUid", "createdByName", "institutionId", "createdAt", "updatedAt"]
+    },
+    "IntegrationConfig": {
+      "title": "Non-Secret Integration Configuration",
+      "description": "Super Admin integration metadata (model preferences, enabled state, last verified status). Never stores API keys or credentials.",
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string", "enum": ["openai", "apify", "gemini_ai", "google_sheets", "firebase", "email_provider", "whatsapp_business", "analytics"] },
+        "label": { "type": "string", "maxLength": 120 },
+        "category": { "type": "string", "maxLength": 64 },
+        "enabled": { "type": "boolean" },
+        "defaultModel": { "type": "string", "maxLength": 80 },
+        "temperature": { "type": "number" },
+        "maxTokens": { "type": "number" },
+        "monthlyBudgetUsd": { "type": "number" },
+        "allowedFeatures": { "type": "array" },
+        "defaultActorId": { "type": "string", "maxLength": 120 },
+        "connectionStatus": { "type": "string", "enum": ["not_configured", "connected", "error", "testing"] },
+        "lastTestedAt": { "type": "string", "maxLength": 40 },
+        "lastError": { "type": "string", "maxLength": 400 },
+        "notes": { "type": "string", "maxLength": 600 },
+        "updatedByUid": { "type": "string", "maxLength": 128 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["provider", "label", "category", "enabled", "connectionStatus", "institutionId"]
+    },
+    "IntegrationLog": {
+      "title": "Immutable Integration Execution Log",
+      "description": "Audit log of connection tests, OpenAI/Gemini generations, and Apify research executions.",
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string", "maxLength": 40 },
+        "action": { "type": "string", "maxLength": 80 },
+        "status": { "type": "string", "enum": ["success", "error", "not_configured"] },
+        "modelOrActor": { "type": "string", "maxLength": 120 },
+        "durationMs": { "type": "number" },
+        "summary": { "type": "string", "maxLength": 500 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 160 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["provider", "action", "status", "summary", "actorUid", "actorEmail", "institutionId", "createdAt"]
+    },
+    "ApifyRunRecord": {
+      "title": "Apify Research Actor Run",
+      "description": "Tracks Super Admin Apify public research runs and reviewed dataset previews.",
+      "type": "object",
+      "properties": {
+        "actorId": { "type": "string", "maxLength": 120 },
+        "runId": { "type": "string", "maxLength": 120 },
+        "datasetId": { "type": "string", "maxLength": 120 },
+        "purpose": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "enum": ["RUNNING", "SUCCEEDED", "FAILED", "ABORTED", "QUEUED"] },
+        "itemCount": { "type": "number" },
+        "previewJson": { "type": "string", "maxLength": 12000 },
+        "reviewedByUid": { "type": "string", "maxLength": 128 },
+        "startedByUid": { "type": "string", "maxLength": 128 },
+        "startedByEmail": { "type": "string", "maxLength": 160 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorId", "runId", "purpose", "status", "startedByUid", "startedByEmail", "institutionId", "createdAt"]
+    },
+    "AutomationWorkflow": {
+      "title": "AI Marketing Automation Workflow",
+      "description": "Configures approval-gated marketing automation rules for courses and campaigns.",
+      "type": "object",
+      "properties": {
+        "workflowKey": { "type": "string", "enum": ["new_course_poster", "course_update_detector", "free_course_campaign", "bulk_campaign_package"] },
+        "name": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 500 },
+        "enabled": { "type": "boolean" },
+        "requiresAdminApproval": { "type": "boolean" },
+        "defaultLanguage": { "type": "string", "enum": ["English", "Tamil", "Sinhala", "Arabic"] },
+        "defaultSizePreset": { "type": "string", "maxLength": 40 },
+        "lastTriggeredAt": { "type": "string", "maxLength": 40 },
+        "lastRunSummary": { "type": "string", "maxLength": 400 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["workflowKey", "name", "description", "enabled", "requiresAdminApproval", "defaultLanguage", "defaultSizePreset", "institutionId"]
+    },
+    "StudentAccount": {
+      "title": "Student Portal Account Metadata",
+      "description": "Admin-managed student credential metadata (never stores plaintext passwords or secret hashes).",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "maxLength": 40 },
+        "username": { "type": "string", "maxLength": 80 },
+        "fullName": { "type": "string", "maxLength": 140 },
+        "email": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "batchName": { "type": "string", "maxLength": 120 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "linkedUserUid": { "type": "string", "maxLength": 128 },
+        "linkedMigratedId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["Not Created", "Invitation Sent", "Active", "Suspended", "Password Reset Required"] },
+        "mustChangePassword": { "type": "boolean" },
+        "invitationSentAt": { "type": "string", "maxLength": 40 },
+        "invitationCount": { "type": "number" },
+        "passwordUpdatedAt": { "type": "string", "maxLength": 40 },
+        "lastLoginAt": { "type": "string", "maxLength": 40 },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdByEmail": { "type": "string", "maxLength": 160 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "username", "fullName", "email", "status", "mustChangePassword", "createdByUid", "createdByEmail", "institutionId", "createdAt", "updatedAt"]
+    },
+    "EmailLog": {
+      "title": "Email Notification Delivery Log",
+      "description": "Audit log of transactional emails sent by TECHMAN COLLEGE LMS with redacted credential previews.",
+      "type": "object",
+      "properties": {
+        "emailType": { "type": "string", "enum": ["student_account_created", "login_credentials", "password_reset", "admission_confirmation", "syllabus_updated", "academic_announcement"] },
+        "recipientEmail": { "type": "string", "maxLength": 160 },
+        "recipientName": { "type": "string", "maxLength": 140 },
+        "studentId": { "type": "string", "maxLength": 40 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "subject": { "type": "string", "maxLength": 240 },
+        "bodyPreview": { "type": "string", "maxLength": 1200 },
+        "provider": { "type": "string", "enum": ["resend", "smtp", "sandbox_outbox"] },
+        "status": { "type": "string", "enum": ["sent", "failed", "queued_configure_provider"] },
+        "errorMessage": { "type": "string", "maxLength": 500 },
+        "retryCount": { "type": "number" },
+        "sentByUid": { "type": "string", "maxLength": 128 },
+        "sentByEmail": { "type": "string", "maxLength": 160 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "sentAt": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["emailType", "recipientEmail", "subject", "bodyPreview", "provider", "status", "retryCount", "sentByUid", "sentByEmail", "institutionId", "createdAt"]
+    },
+    "SyllabusApprovalLog": {
+      "title": "Immutable Syllabus Approval Audit Log",
+      "description": "Tracks every syllabus submission, approval, publication, restoration, and archival event.",
+      "type": "object",
+      "properties": {
+        "syllabusId": { "type": "string", "maxLength": 128 },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseName": { "type": "string", "maxLength": 160 },
+        "previousVersionNumber": { "type": "number" },
+        "versionNumber": { "type": "number" },
+        "action": { "type": "string", "enum": ["submitted_for_approval", "approved", "published", "archived", "restored", "rejected"] },
+        "changeDescription": { "type": "string", "maxLength": 600 },
+        "performedByUid": { "type": "string", "maxLength": 128 },
+        "performedByName": { "type": "string", "maxLength": 120 },
+        "performedByEmail": { "type": "string", "maxLength": 160 },
+        "institutionId": { "type": "string", "maxLength": 64 },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["syllabusId", "courseId", "courseName", "previousVersionNumber", "versionNumber", "action", "changeDescription", "performedByUid", "performedByName", "performedByEmail", "institutionId", "timestamp"]
     }
   },
   "firestore": {
@@ -1063,6 +1405,58 @@
     "/moduleProgress/{progressId}": {
       "schema": { "$ref": "#/entities/ModuleProgress" },
       "description": "Student-owned syllabus module, topic, activity, and assignment completion progress."
+    },
+    "/brandSettings/{institutionId}": {
+      "schema": { "$ref": "#/entities/BrandSettings" },
+      "description": "Centralized TECHMAN brand theme, logos, and contact defaults for poster generation."
+    },
+    "/generatedPosters/{posterId}": {
+      "schema": { "$ref": "#/entities/GeneratedPoster" },
+      "description": "AI-assisted marketing posters with approval governance and version tracking."
+    },
+    "/posterVersions/{versionId}": {
+      "schema": { "$ref": "#/entities/PosterVersion" },
+      "description": "Immutable historical snapshots of generated posters."
+    },
+    "/posterApprovalLogs/{logId}": {
+      "schema": { "$ref": "#/entities/PosterApprovalLog" },
+      "description": "Immutable audit log of poster approval workflow actions."
+    },
+    "/posterPublishingLogs/{logId}": {
+      "schema": { "$ref": "#/entities/PosterPublishingLog" },
+      "description": "Immutable audit log of approved poster publishing and export events."
+    },
+    "/marketingCampaigns/{campaignId}": {
+      "schema": { "$ref": "#/entities/MarketingCampaign" },
+      "description": "Grouped marketing campaigns across courses and posters."
+    },
+    "/integrations/{providerId}": {
+      "schema": { "$ref": "#/entities/IntegrationConfig" },
+      "description": "Super Admin non-secret integration configuration and live verified status."
+    },
+    "/integrationLogs/{logId}": {
+      "schema": { "$ref": "#/entities/IntegrationLog" },
+      "description": "Immutable execution and test audit logs for AI & automation integrations."
+    },
+    "/apifyRuns/{runId}": {
+      "schema": { "$ref": "#/entities/ApifyRunRecord" },
+      "description": "Super Admin Apify public research actor runs and dataset previews."
+    },
+    "/automationWorkflows/{workflowId}": {
+      "schema": { "$ref": "#/entities/AutomationWorkflow" },
+      "description": "Approval-gated AI marketing automation workflow definitions."
+    },
+    "/studentAccounts/{accountId}": {
+      "schema": { "$ref": "#/entities/StudentAccount" },
+      "description": "Admin-only student portal credential metadata records (zero plaintext passwords)."
+    },
+    "/emailLogs/{logId}": {
+      "schema": { "$ref": "#/entities/EmailLog" },
+      "description": "Transactional email notification delivery and failure logs."
+    },
+    "/syllabusApprovalLogs/{logId}": {
+      "schema": { "$ref": "#/entities/SyllabusApprovalLog" },
+      "description": "Immutable syllabus version approval and publication audit log."
     }
   }
 }

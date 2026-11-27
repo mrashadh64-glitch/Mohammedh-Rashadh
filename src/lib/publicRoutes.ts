@@ -59,6 +59,8 @@ export function parsePublicPathname(pathname: string, search = ''): ParsedPublic
   if (clean === '/about') return { page: 'about' };
   if (clean === '/academics') return { page: 'academics' };
   if (clean === '/courses') return { page: 'courses' };
+  if (clean === '/courses/certificate') return { page: 'courses', param: 'certificate' };
+  if (clean === '/courses/diploma') return { page: 'courses', param: 'diploma' };
   if (clean.startsWith('/courses/')) {
     return { page: 'course-detail', param: decodeURIComponent(clean.slice('/courses/'.length)) };
   }
@@ -99,6 +101,8 @@ export function buildPublicPath(page: PublicPage, param?: string): string {
     case 'academics':
       return '/academics';
     case 'courses':
+      if (param === 'certificate') return '/courses/certificate';
+      if (param === 'diploma') return '/courses/diploma';
       return '/courses';
     case 'course-detail':
       return param ? `/courses/${encodeURIComponent(param)}` : '/courses';
@@ -267,8 +271,17 @@ export function applyRouteSeo(
   customDescription?: string
 ): void {
   const base = ROUTE_SEO[page] || ROUTE_SEO.home;
-  const title = customTitle ? `${customTitle} — TECHMAN COLLEGE` : base.title;
-  const description = customDescription || base.description;
+  let title = customTitle ? `${customTitle} — TECHMAN COLLEGE ONLINE` : base.title;
+  let description = customDescription || base.description;
+  if (page === 'courses' && param === 'certificate') {
+    title = 'Certificate Level Courses (22 Programmes) — TECHMAN COLLEGE ONLINE';
+    description =
+      'Explore all 22 published 2027 Certificate courses including 5 FREE Certificate programmes across IT, AI, Digital Marketing, Business, Psychology, and Arabic & Islamic Studies.';
+  } else if (page === 'courses' && param === 'diploma') {
+    title = 'Diploma & International Diploma Courses (18 Programmes) — TECHMAN COLLEGE ONLINE';
+    description =
+      'Explore all 18 published 2027 International Diploma and Diploma programmes at TECHMAN COLLEGE ONLINE.';
+  }
   const canonicalUrl = `${window.location.origin}${buildPublicPath(page, param)}`;
 
   document.title = title;

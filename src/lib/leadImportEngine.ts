@@ -611,6 +611,83 @@ export function downloadLeadSampleTemplate(): void {
   XLSX.writeFile(wb, 'TECHMAN_COLLEGE_Lead_Import_Template.xlsx');
 }
 
+export function downloadLeadCsvTemplate(): void {
+  const headers = [
+    'Full Name',
+    'Mobile Number',
+    'WhatsApp Number',
+    'Email Address',
+    'City',
+    'District',
+    'Interested Course',
+    'Preferred Branch',
+    'Preferred Study Mode',
+    'Education Qualification',
+    'Academic Year',
+    'Lead Source',
+    'Campaign Name',
+    'Social Media Platform',
+    'Referral Name',
+    'Enquiry Date',
+    'Priority',
+    'Next Follow-up Date',
+    'Follow-up Notes',
+  ];
+  const sampleRow = [
+    'Amina Farook',
+    '0771234567',
+    '0771234567',
+    'amina.farook@example.com',
+    'Colombo',
+    'Colombo',
+    'Diploma in Artificial Intelligence',
+    'Colombo HQ',
+    'Hybrid',
+    'G.C.E. A/L',
+    '2027',
+    'Facebook Ads',
+    '2027 AI Intake Campaign',
+    'Facebook',
+    '',
+    new Date().toISOString().slice(0, 10),
+    'High',
+    new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
+    'Requested weekend batch details',
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Leads_Template');
+  XLSX.writeFile(wb, 'TECHMAN_COLLEGE_Lead_Import_Template.csv', { bookType: 'csv' });
+}
+
+export function computeLeadBatchFingerprint(
+  fileName: string,
+  rows: Array<{ rowNumber: number; values: Record<string, string> }>
+): string {
+  const canonical = JSON.stringify({
+    fileName: fileName.trim().toLowerCase(),
+    count: rows.length,
+    sample: rows.slice(0, 25).map((r) => r.values),
+  });
+  let h1 = 0x811c9dc5;
+  for (let i = 0; i < canonical.length; i++) {
+    h1 ^= canonical.charCodeAt(i);
+    h1 = Math.imul(h1, 0x01000193);
+  }
+  return `fp_${(h1 >>> 0).toString(16).padStart(8, '0')}_${rows.length}`;
+}
+
+export function normalizeGoogleSheetsCsvUrl(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed.startsWith('https://docs.google.com/spreadsheets/')) return null;
+  if (trimmed.includes('output=csv') || trimmed.includes('format=csv')) return trimmed;
+  const idMatch = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (!idMatch) return null;
+  const gidMatch = trimmed.match(/[?&#]gid=([0-9]+)/);
+  const gid = gidMatch ? `&gid=${gidMatch[1]}` : '';
+  return `https://docs.google.com/spreadsheets/d/${idMatch[1]}/export?format=csv${gid}`;
+}
+
 export function exportLeadsToSpreadsheet(
   leads: LeadRecord[],
   fileName: string,

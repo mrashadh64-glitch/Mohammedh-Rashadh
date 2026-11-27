@@ -23,6 +23,8 @@ import {
   UserRole,
 } from '../types/lms';
 import {
+  DEFAULT_AUTOMATION_WORKFLOWS,
+  DEFAULT_BRAND_SETTINGS,
   DEFAULT_FREE_SKILL_PROGRAMME,
   DEFAULT_ROLE_PERMISSIONS,
   DEFAULT_SYSTEM_SETTINGS,
@@ -208,79 +210,218 @@ export async function activateOrLoadUserProfile(firebaseUser: User): Promise<{
   return { profile: existingProfile, pii: piiData };
 }
 
+export async function syncMissing2027Courses(
+  actorUid: string,
+  actorEmail: string
+): Promise<{ addedCount: number; skippedCount: number; totalInDb: number }> {
+  const now = new Date().toISOString();
+  let addedCount = 0;
+  let skippedCount = 0;
+  let totalInDb = 0;
+
+  try {
+    const existingSnap = await getDocs(collection(db, 'courses'));
+    const existingIds = new Set<string>();
+    const existingNames = new Set<string>();
+    const existingSlugs = new Set<string>();
+    existingSnap.docs.forEach((d) => {
+      const data = d.data() as Partial<Course>;
+      existingIds.add(d.id.toLowerCase());
+      if (data.name) existingNames.add(String(data.name).trim().toLowerCase());
+      if (data.slug) existingSlugs.add(String(data.slug).trim().toLowerCase());
+    });
+    totalInDb = existingSnap.size;
+
+    const courseBatch = writeBatch(db);
+    for (const course of SEED_COURSES) {
+      const normId = course.id.toLowerCase();
+      const normName = course.name.trim().toLowerCase();
+      const normSlug = (course.slug || course.id).trim().toLowerCase();
+      if (existingIds.has(normId) || existingNames.has(normName) || existingSlugs.has(normSlug)) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const ref = doc(db, 'courses', course.id);
+      const payload: Record<string, unknown> = {
+        code: course.code.slice(0, 32),
+        slug: (course.slug || course.id).slice(0, 140),
+        name: course.name.slice(0, 160),
+        category: course.category,
+        domain: (course.domain || 'IT & Technology').slice(0, 64),
+        description: (course.description || '').slice(0, 1200),
+        imageUrl: (course.imageUrl || '').slice(0, 500),
+        bannerUrl: (course.bannerUrl || course.imageUrl || '').slice(0, 600),
+        level: (course.level || '').slice(0, 40),
+        duration: (course.duration || 'Pending Admin Setup').slice(0, 64),
+        mode: course.mode,
+        courseFeeLkr: Number.isFinite(course.courseFeeLkr) ? Math.max(0, course.courseFeeLkr) : 0,
+        feeConfigured: Boolean(course.isFree) || course.feeConfigured === true,
+        isFree: Boolean(course.isFree),
+        currency: (course.currency || 'LKR').slice(0, 12),
+        registrationFeeLkr: Math.max(0, Number(course.registrationFeeLkr) || 0),
+        certificateFeeLkr: Math.max(0, Number(course.certificateFeeLkr) || 0),
+        installmentPlan: (course.installmentPlan || 'Pending Admin Setup').slice(0, 120),
+        courseLanguage: (course.courseLanguage || 'Pending Admin Setup').slice(0, 64),
+        branchIds: (course.branchIds || []).slice(0, 20),
+        admissionStatus: course.admissionStatus || 'open',
+        academicYear: (course.academicYear || '2027').slice(0, 16),
+        featured: Boolean(course.featured),
+        seoTitle: (course.seoTitle || course.name).slice(0, 180),
+        seoDescription: (course.seoDescription || course.description || '').slice(0, 360),
+        lecturerName: (course.lecturerName || 'Pending Admin Setup').slice(0, 120),
+        batchName: (course.batchName || '2027 Intake — Pending Admin Setup').slice(0, 80),
+        startDate: (course.startDate || 'Pending Admin Setup').slice(0, 32),
+        endDate: (course.endDate || 'Pending Admin Setup').slice(0, 32),
+        maxStudents: course.maxStudents ?? 45,
+        entryRequirements: (course.entryRequirements || 'Pending Admin Setup').slice(0, 400),
+        learningOutcomes: (course.learningOutcomes || []).slice(0, 20),
+        syllabusTopics: (course.syllabusTopics || []).slice(0, 30),
+        certificateEligible: course.certificateEligible !== false,
+        status: course.status || 'published',
+        institutionId: INSTITUTE_INFO.institutionId,
+        updatedAt: now,
+      };
+      courseBatch.set(ref, payload);
+      existingIds.add(normId);
+      existingNames.add(normName);
+      existingSlugs.add(normSlug);
+      addedCount += 1;
+    }
+
+    if (addedCount > 0) {
+      await courseBatch.commit();
+      totalInDb += addedCount;
+      await logAuditEvent({
+        actorUid,
+        actorEmail,
+        actorRole: 'SUPER_ADMIN',
+        action: 'SYNC_2027_COURSE_CATALOG',
+        targetType: 'courses',
+        targetId: 'catalog-2027',
+        details: `Added ${addedCount} missing unique 2027 courses; skipped ${skippedCount} existing records (zero duplicates, zero overwrites).`,
+      });
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'courses');
+  }
+
+  return { addedCount, skippedCount, totalInDb };
+}
+
 export async function initialize2027InstituteCatalog(actorUid: string, actorEmail: string): Promise<void> {
   const now = new Date().toISOString();
-  const batch = writeBatch(db);
 
-  // 1. Seed 32 official courses
-  for (const course of SEED_COURSES) {
-    const ref = doc(db, 'courses', course.id);
-    batch.set(
-      ref,
+  // 1. Safely sync all 40 unique official 2027 courses (never duplicates or overwrites existing edits)
+  await syncMissing2027Courses(actorUid, actorEmail);
+
+  // 2. Seed branches (strip `id` — excluded by isValidBranch hasOnly!)
+  try {
+    const branchBatch = writeBatch(db);
+    for (const branch of SEED_BRANCHES) {
+      const { id, ...branchData } = branch;
+      branchBatch.set(
+        doc(db, 'branches', id),
+        {
+          code: branchData.code.slice(0, 24),
+          name: branchData.name.slice(0, 120),
+          city: branchData.city.slice(0, 80),
+          address: (branchData.address || '').slice(0, 240),
+          phone: (branchData.phone || '').slice(0, 32),
+          managerName: (branchData.managerName || '').slice(0, 120),
+          coordinatorName: (branchData.coordinatorName || '').slice(0, 120),
+          status: branchData.status,
+          institutionId: branchData.institutionId,
+          createdAt: now,
+        },
+        { merge: true }
+      );
+    }
+    await branchBatch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'branches');
+  }
+
+  // 3. Seed 13 role permission configs + systemSettings + brandSettings + automationWorkflows
+  try {
+    const configBatch = writeBatch(db);
+    for (const rp of DEFAULT_ROLE_PERMISSIONS) {
+      configBatch.set(
+        doc(db, 'rolePermissions', rp.role),
+        {
+          role: rp.role,
+          label: rp.label.slice(0, 80),
+          description: (rp.description || '').slice(0, 240),
+          permissions: rp.permissions.slice(0, 40),
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    }
+    configBatch.set(
+      doc(db, 'systemSettings', INSTITUTE_INFO.institutionId),
       {
-        code: course.code,
-        name: course.name,
-        category: course.category,
-        domain: course.domain || 'General',
-        description: course.description || '',
-        imageUrl: course.imageUrl || '',
-        level: course.level || '',
-        duration: course.duration,
-        mode: course.mode,
-        courseFeeLkr: course.courseFeeLkr,
-        registrationFeeLkr: course.registrationFeeLkr ?? 3000,
-        certificateFeeLkr: course.certificateFeeLkr ?? 2500,
-        installmentPlan: course.installmentPlan || '',
-        lecturerName: course.lecturerName || 'TECHMAN COLLEGE Senior Faculty',
-        batchName: course.batchName || '2027 Intake — Batch 01',
-        startDate: course.startDate || '2027-01-18',
-        endDate: course.endDate || '2027-07-30',
-        maxStudents: course.maxStudents ?? 45,
-        entryRequirements: course.entryRequirements || '',
-        learningOutcomes: course.learningOutcomes || [],
-        syllabusTopics: course.syllabusTopics || [],
-        certificateEligible: true,
-        status: 'published',
-        institutionId: INSTITUTE_INFO.institutionId,
+        ...DEFAULT_SYSTEM_SETTINGS,
+        catalogInitialized: true,
         updatedAt: now,
       },
       { merge: true }
     );
+    configBatch.set(
+      doc(db, 'brandSettings', INSTITUTE_INFO.institutionId),
+      {
+        ...DEFAULT_BRAND_SETTINGS,
+        updatedByUid: actorUid,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+    for (const wf of DEFAULT_AUTOMATION_WORKFLOWS) {
+      const { id: _wfId, ...wfData } = wf;
+      configBatch.set(
+        doc(db, 'automationWorkflows', wf.workflowKey),
+        {
+          ...wfData,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    }
+    await configBatch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'systemSettings');
   }
 
-  // 2. Seed initial branches
-  for (const branch of SEED_BRANCHES) {
-    batch.set(doc(db, 'branches', branch.id), { ...branch, createdAt: now }, { merge: true });
-  }
-
-  // 3. Seed 13 role permission configurations
-  for (const rp of DEFAULT_ROLE_PERMISSIONS) {
-    batch.set(doc(db, 'rolePermissions', rp.role), { ...rp, updatedAt: now }, { merge: true });
-  }
-
-  // 4. Seed initial CMS news, events, FAQs, and stories
-  for (const item of SEED_CMS_ITEMS) {
-    batch.set(doc(db, 'cmsItems', item.id), { ...item, createdBy: actorUid, updatedAt: now }, { merge: true });
-  }
-
-  // 5. System settings
-  batch.set(
-    doc(db, 'systemSettings', INSTITUTE_INFO.institutionId),
-    {
-      ...DEFAULT_SYSTEM_SETTINGS,
-      catalogInitialized: true,
-      updatedAt: now,
-    },
-    { merge: true }
-  );
-
+  // 4. Seed CMS items (strip `id` — excluded by isValidCmsItem hasOnly!)
   try {
-    await batch.commit();
+    const cmsBatch = writeBatch(db);
+    for (const item of SEED_CMS_ITEMS) {
+      const { id, ...cmsData } = item;
+      const cmsPayload: Record<string, unknown> = {
+        itemType: cmsData.itemType,
+        title: cmsData.title.slice(0, 180),
+        summary: cmsData.summary.slice(0, 1600),
+        status: cmsData.status,
+        createdBy: actorUid,
+        institutionId: cmsData.institutionId,
+        updatedAt: now,
+      };
+      if (cmsData.category) cmsPayload.category = cmsData.category.slice(0, 64);
+      if (cmsData.imageUrl) cmsPayload.imageUrl = cmsData.imageUrl.slice(0, 600);
+      if (cmsData.eventDate) cmsPayload.eventDate = cmsData.eventDate.slice(0, 32);
+      if (cmsData.aiSuggestedTags) cmsPayload.aiSuggestedTags = cmsData.aiSuggestedTags.slice(0, 15);
+      cmsBatch.set(doc(db, 'cmsItems', id), cmsPayload, { merge: true });
+    }
+    await cmsBatch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'cmsItems');
+  }
 
-    // 6. Duplicate-safe check before seeding TECHMAN FREE SKILL DEVELOPMENT PROGRAMME
-    await ensureSpecialProgrammeExists(actorUid, actorEmail);
+  // 5. Duplicate-safe check before seeding TECHMAN FREE SKILL DEVELOPMENT PROGRAMME
+  await ensureSpecialProgrammeExists(actorUid, actorEmail);
 
-    // Add initial sample lessons for flagship courses so LMS player works immediately
+  // 6. Initial sample lessons for flagship courses + AI First Class PDF deck
+  try {
     const flagshipCourses: Course[] = SEED_COURSES.slice(0, 6);
     const lessonBatch = writeBatch(db);
     for (const c of flagshipCourses) {
@@ -292,13 +433,19 @@ export async function initialize2027InstituteCatalog(actorUid: string, actorEmai
           {
             courseId: c.id,
             moduleTitle: `Module 0${idx + 1}`,
-            title: topic,
+            title: topic.slice(0, 160),
             type: idx % 2 === 0 ? 'video' : 'pdf',
             durationMinutes: 35 + idx * 10,
             orderIndex: idx + 1,
             videoUrl: '',
-            resourceUrl: '',
-            summary: `Core 2027 syllabus session for ${c.name}: ${topic}. Includes hands-on lab tasks and lecturer commentary.`,
+            resourceUrl:
+              c.id === 'cert-artificial-intelligence' && idx === 0
+                ? '/assets/aistudio/AI_First_Class_-_No_Hype_Only_Reality_8465d6c3.pdf'
+                : '',
+            summary: `Core 2027 syllabus session for ${c.name}: ${topic}. Includes hands-on lab tasks and lecturer commentary.`.slice(
+              0,
+              2000
+            ),
             published: true,
             updatedAt: now,
           },
@@ -315,10 +462,11 @@ export async function initialize2027InstituteCatalog(actorUid: string, actorEmai
       action: 'INITIALIZE_2027_CATALOG',
       targetType: 'courses',
       targetId: INSTITUTE_INFO.institutionId,
-      details: 'Initialized 32 official 2027 courses, 3 branches, 13 RBAC role configs, and initial CMS entries.',
+      details:
+        'Synchronized 40 unique official 2027 courses (22 Certificate incl. 5 FREE + 18 Diploma), 5 branches, 13 RBAC role configs, brand defaults, workflows, and CMS entries.',
     });
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, 'courses');
+    handleFirestoreError(err, OperationType.WRITE, 'courses/lessons');
   }
 }
 

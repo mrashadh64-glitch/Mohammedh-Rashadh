@@ -38,6 +38,8 @@ import { db } from '../../lib/firebase';
 import { logAuditEvent, makeSafeId } from '../../lib/firestoreService';
 import {
   autoMapLeadColumns,
+  computeLeadBatchFingerprint,
+  downloadLeadCsvTemplate,
   downloadLeadSampleTemplate,
   DuplicateAction,
   exportLeadErrorReport,
@@ -51,6 +53,7 @@ import {
   LeadImportFieldKey,
   mergeLeadFields,
   normalizeEmail,
+  normalizeGoogleSheetsCsvUrl,
   normalizePhone,
   ParsedLeadSpreadsheet,
   parseLeadSpreadsheet,
@@ -190,6 +193,9 @@ export const LeadManagementHub: React.FC<LeadManagementHubProps> = ({
   // Selection & Bulk Actions
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkStaffUid, setBulkStaffUid] = useState<string>('');
+  const [bulkStatus, setBulkStatus] = useState<string>('');
+  const [googleSheetsUrl, setGoogleSheetsUrl] = useState<string>('');
+  const [fetchingSheet, setFetchingSheet] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Modals & Profile Drawer
@@ -547,6 +553,78 @@ export const LeadManagementHub: React.FC<LeadManagementHubProps> = ({
     }
   };
 
+  // Bulk Status Update for Selected Leads
+  const handleBulkStatusUpdate = async (targetIds: string[], nextStatus: LeadStatus) => {
+    if (targetIds.length === 0 || !nextStatus) return;
+    if (nextStatus === 'Converted to Student') {
+      notify('error', 'Please convert leads individually so Admission Applications & Student IDs are validated.');
+      return;
+    }
+    try {
+      const now = new Date().toISOString();
+      const batch = writeBatch(db);
+      for (const id of targetIds) {
+        batch.update(doc(db, 'leads', id), {
+          status: nextStatus,
+          lastContactDate: now.slice(0, 10),
+          updatedAt: now,
+        });
+      }
+      await batch.commit();
+      for (const id of targetIds.slice(0, 10)) {
+        const l = scopedLeads.find((x) => x.id === id);
+        await appendLeadActivity({
+          leadId: id,
+          leadCode: l?.leadId,
+          actionType: 'status_change',
+          previousStatus: l?.status,
+          newStatus: nextStatus,
+          note: `Bulk status updated to "${nextStatus}" by ${profile.displayName}.`,
+          branchId: l?.preferredBranchId,
+        });
+      }
+      setSelectedIds(new Set());
+      setBulkStatus('');
+      notify('success', `Updated status of ${targetIds.length} lead(s) to "${nextStatus}".`);
+      await onRefreshData();
+    } catch (err) {
+      notify('error', err instanceof Error ? err.message : 'Bulk status update failed.');
+    }
+  };
+
+  // Google Sheets Published CSV Import
+  const handleGoogleSheetsImport = async () => {
+    const csvUrl = normalizeGoogleSheetsCsvUrl(googleSheetsUrl);
+    if (!csvUrl) {
+      notify('error', 'Enter a valid Google Sheets URL (https://docs.google.com/spreadsheets/...).');
+      return;
+    }
+    setFetchingSheet(true);
+    try {
+      const resp = await fetch(csvUrl);
+      if (!resp.ok) {
+        throw new Error('Unable to access sheet. Ensure the Google Sheet is published to the web or shared as "Anyone with link can view".');
+      }
+      const csvText = await resp.text();
+      const buf = new TextEncoder().encode(csvText).buffer;
+      const parsed = parseLeadSpreadsheet(buf, 'Google_Sheets_Import.csv');
+      if (parsed.headers.length === 0 || parsed.rows.length === 0) {
+        notify('error', 'The Google Sheet returned no readable rows.');
+        return;
+      }
+      setRawWorkbookBuffer(buf);
+      setParsedSheet(parsed);
+      setColMapping(autoMapLeadColumns(parsed.headers));
+      setImportResult(null);
+      setImportStep('map');
+      notify('success', `Loaded ${parsed.rows.length} rows from Google Sheets for column mapping.`);
+    } catch (err) {
+      notify('error', err instanceof Error ? err.message : 'Google Sheets import failed.');
+    } finally {
+      setFetchingSheet(false);
+    }
+  };
+
   // Archive or Delete Lead
   const handleArchiveOrDelete = async (lead: LeadRecord, hardDelete: boolean) => {
     try {
@@ -892,10 +970,19 @@ export const LeadManagementHub: React.FC<LeadManagementHubProps> = ({
       await flushIfNeeded(true);
       void ops;
 
+      // Idempotent batch fingerprint check
+      const batchFingerprint = computeLeadBatchFingerprint(parsedSheet.fileName, parsedSheet.rows);
+      const duplicateBatch = leadImportBatches.find((b) => b.batchFingerprint === batchFingerprint);
+      if (duplicateBatch && importedCount === 0 && mergedCount === 0) {
+        notify('error', `This exact spreadsheet batch was already imported on ${duplicateBatch.createdAt.slice(0, 10)}.`);
+        return;
+      }
+
       // Record immutable Import Batch History
       await setDoc(doc(db, 'leadImportBatches', batchId), {
         fileName: parsedSheet.fileName.slice(0, 200),
         sheetName: parsedSheet.activeSheet.slice(0, 120),
+        batchFingerprint,
         totalRows: previewRows.length,
         importedCount,
         mergedCount,
@@ -1348,27 +1435,50 @@ export const LeadManagementHub: React.FC<LeadManagementHubProps> = ({
                 Show Archived
               </label>
 
-              {selectedIds.size > 0 && canAssignStaff && (
-                <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-slate-700">
+              {selectedIds.size > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-slate-700">
                   <select
-                    value={bulkStaffUid}
-                    onChange={(e) => setBulkStaffUid(e.target.value)}
+                    value={bulkStatus}
+                    onChange={(e) => setBulkStatus(e.target.value)}
                     className="px-2.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
                   >
-                    <option value="">Assign {selectedIds.size} to...</option>
-                    {assignableStaff.map((s) => (
-                      <option key={s.uid} value={s.uid}>
-                        {s.displayName}
+                    <option value="">Set Status ({selectedIds.size})...</option>
+                    {LEAD_STATUS_OPTIONS.filter((s) => s !== 'Converted to Student').map((st) => (
+                      <option key={st} value={st}>
+                        {st}
                       </option>
                     ))}
                   </select>
                   <button
-                    disabled={!bulkStaffUid}
-                    onClick={() => void handleAssignLeads(Array.from(selectedIds), bulkStaffUid)}
-                    className="px-3 py-2 rounded-lg bg-[#101D35] text-white text-xs font-semibold disabled:opacity-40 cursor-pointer"
+                    disabled={!bulkStatus}
+                    onClick={() => void handleBulkStatusUpdate(Array.from(selectedIds), bulkStatus as LeadStatus)}
+                    className="px-3 py-2 rounded-lg bg-[#1677FF] text-white text-xs font-semibold disabled:opacity-40 cursor-pointer"
                   >
-                    Assign
+                    Update
                   </button>
+                  {canAssignStaff && (
+                    <>
+                      <select
+                        value={bulkStaffUid}
+                        onChange={(e) => setBulkStaffUid(e.target.value)}
+                        className="px-2.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                      >
+                        <option value="">Assign {selectedIds.size} to...</option>
+                        {assignableStaff.map((s) => (
+                          <option key={s.uid} value={s.uid}>
+                            {s.displayName}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        disabled={!bulkStaffUid}
+                        onClick={() => void handleAssignLeads(Array.from(selectedIds), bulkStaffUid)}
+                        className="px-3 py-2 rounded-lg bg-[#101D35] text-white text-xs font-semibold disabled:opacity-40 cursor-pointer"
+                      >
+                        Assign
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1588,7 +1698,14 @@ export const LeadManagementHub: React.FC<LeadManagementHubProps> = ({
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer"
               >
                 <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                Download Sample Excel Template
+                Excel Template (.xlsx)
+              </button>
+              <button
+                onClick={downloadLeadCsvTemplate}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-[#1677FF]" />
+                CSV Template (.csv)
               </button>
               <button
                 onClick={() => {
@@ -1614,7 +1731,7 @@ export const LeadManagementHub: React.FC<LeadManagementHubProps> = ({
               {/* Stepper */}
               <div className="grid grid-cols-4 gap-2 text-xs">
                 {[
-                  { id: 'upload', label: '1. Upload File' },
+                  { id: 'upload', label: '1. Upload / Sheets' },
                   { id: 'map', label: '2. Map Columns' },
                   { id: 'preview', label: '3. Validate & Confirm' },
                   { id: 'done', label: '4. Import Summary' },
@@ -1633,29 +1750,64 @@ export const LeadManagementHub: React.FC<LeadManagementHubProps> = ({
               </div>
 
               {importStep === 'upload' && (
-                <div className="p-8 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-center space-y-4">
-                  <Upload className="w-10 h-10 text-[#1677FF] mx-auto" />
-                  <div>
-                    <h2 className="text-base font-bold text-[#101D35] dark:text-white">
-                      Upload Excel (.xlsx, .xls) or CSV (.csv) Lead Sheet
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-lg mx-auto">
-                      Only columns present in your file will be imported—missing fields are never invented. Every row is checked against existing leads and TECHMAN COLLEGE student records before saving.
-                    </p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="p-8 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-center space-y-4">
+                    <Upload className="w-10 h-10 text-[#1677FF] mx-auto" />
+                    <div>
+                      <h2 className="text-base font-bold text-[#101D35] dark:text-white">
+                        Upload Excel (.xlsx, .xls) or CSV (.csv)
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                        Only columns present in your file will be imported—missing fields are never invented. Every row is checked against existing leads and TECHMAN student records.
+                      </p>
+                    </div>
+                    <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#1677FF] hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer">
+                      <FileSpreadsheet className="w-4 h-4" />
+                      Choose Spreadsheet File
+                      <input
+                        type="file"
+                        accept=".xlsx,.xls,.csv"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void handleFileUpload(f);
+                        }}
+                      />
+                    </label>
                   </div>
-                  <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#1677FF] hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer">
-                    <FileSpreadsheet className="w-4 h-4" />
-                    Choose Spreadsheet File
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void handleFileUpload(f);
-                      }}
-                    />
-                  </label>
+
+                  <div className="p-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between space-y-4">
+                    <div className="space-y-2">
+                      <div className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                        <FileSpreadsheet className="w-4 h-4" />
+                        Google Sheets Direct Import
+                      </div>
+                      <h2 className="text-base font-bold text-[#101D35] dark:text-white">
+                        Import From Published Google Sheet
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Paste a Google Sheets link (shared as view-only or published as CSV). Rows flow through the exact same column mapping, validation, and duplicate skip/merge preview.
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      <input
+                        type="url"
+                        value={googleSheetsUrl}
+                        onChange={(e) => setGoogleSheetsUrl(e.target.value)}
+                        placeholder="https://docs.google.com/spreadsheets/d/..."
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                      />
+                      <button
+                        type="button"
+                        disabled={fetchingSheet || !googleSheetsUrl.trim()}
+                        onClick={() => void handleGoogleSheetsImport()}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        {fetchingSheet ? 'Loading Google Sheet...' : 'Fetch & Map Google Sheet'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

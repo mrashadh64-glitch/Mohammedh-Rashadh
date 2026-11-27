@@ -15,10 +15,10 @@ export default defineConfig(() => {
         includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png'],
         manifest: {
           id: '/',
-          name: 'TECHMAN COLLEGE — Official LMS',
-          short_name: 'TECHMAN COLLEGE',
+          name: 'TECHMAN COLLEGE ONLINE — Official LMS',
+          short_name: 'TECHMAN ONLINE',
           description:
-            'Official AI-Powered Learning Management System for TECHMAN COLLEGE (Established in 2021), Sri Lanka — 2027 Admissions, Student & Lecturer Portals, and QR Certificate Verification.',
+            'Official AI-Powered Learning Management System for TECHMAN COLLEGE ONLINE (https://techmancollege.online), Sri Lanka — 2027 40-Course Catalogue, Admissions, Student & Lecturer Portals, and QR Certificate Verification.',
           theme_color: '#101D35',
           background_color: '#F8FAFC',
           display: 'standalone',
@@ -118,6 +118,11 @@ export default defineConfig(() => {
       cssMinify: true,
       cssCodeSplit: true,
       sourcemap: false,
+    },
+    define: {
+      'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(
+        process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || ''
+      ),
     },
     resolve: {
       alias: {

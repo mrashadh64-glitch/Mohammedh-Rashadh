@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// TECHMAN COLLEGE ONLINE — Firebase Storage Security Rules
+// Bucket: gen-lang-client-0285702968.firebasestorage.app
+// Default-deny policy with strict size (15 MB) and MIME-type enforcement for syllabus documents.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isVerifiedAuth() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isAuthorizedSuperOwner() {
+      return isVerifiedAuth() &&
+        request.auth.token.email in ['mrashadh64@gmail.com', 'techmanfgoc@gmail.com'];
+    }
+
+    function isAllowedSyllabusFile() {
+      return request.resource != null &&
+        request.resource.size > 0 &&
+        request.resource.size <= 15 * 1024 * 1024 &&
+        request.resource.contentType != null &&
+        request.resource.contentType.matches(
+          'application/pdf|application/msword|application/vnd\\.openxmlformats-officedocument\\.(wordprocessingml\\.document|spreadsheetml\\.sheet|presentationml\\.presentation)|image/(png|jpeg|webp)'
+        );
+    }
+
+    // Official course syllabus attachments: syllabuses/{courseId}/{syllabusId}/v{n}/{fileName}
+    match /syllabuses/{courseId}/{syllabusId}/{versionDir}/{fileName} {
+      allow read: if isVerifiedAuth();
+      allow create, update: if isAuthorizedSuperOwner() && isAllowedSyllabusFile();
+      allow delete: if isAuthorizedSuperOwner();
+    }
+
+    // Default deny for all other storage paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

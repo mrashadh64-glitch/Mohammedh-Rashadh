@@ -28,6 +28,7 @@ import {
   BRAND_IMAGES,
   CAMPUS_GALLERY,
   CampusGalleryItem,
+  DEFAULT_BRAND_SETTINGS,
   DEFAULT_FREE_SKILL_PROGRAMME,
   INSTITUTE_INFO,
   SEED_BRANCHES,
@@ -36,10 +37,12 @@ import {
 } from '../../data/catalogSeed';
 import {
   Branch,
+  BrandSettings,
   Certificate,
   CmsItem,
   CommunityPost,
   Course,
+  GeneratedPoster,
   SpecialProgramme,
   UserProfile,
 } from '../../types/lms';
@@ -80,6 +83,9 @@ const AchievementsPage = lazy(() =>
 );
 const CampusPage = lazy(() =>
   import('./ui/PublicDetailPages').then((m) => ({ default: m.CampusPage }))
+);
+const CampusMapsExplorer = lazy(() =>
+  import('../features/CampusMapsExplorer').then((m) => ({ default: m.CampusMapsExplorer }))
 );
 const CareerPage = lazy(() =>
   import('./ui/PublicDetailPages').then((m) => ({ default: m.CareerPage }))
@@ -146,7 +152,19 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
   toggleTheme,
   onEnterPortal,
 }) => {
-  const { firebaseUser, profile, isOwner, signInWithGoogle, authError } = useAuth();
+  const {
+    firebaseUser,
+    studentSessionToken,
+    pendingPasswordChange,
+    profile,
+    isOwner,
+    signInWithGoogle,
+    signInWithStudentCredentials,
+    completeFirstLoginPasswordChange,
+    activateStudentAccount,
+    cancelPendingPasswordChange,
+    authError,
+  } = useAuth();
   const [page, setPage] = useState<PublicPage>(initialPage);
   const [routeParam, setRouteParam] = useState<string>(initialParam);
 
@@ -161,6 +179,12 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
   const [showcasePosts, setShowcasePosts] = useState<CommunityPost[]>(
     initialCache?.showcasePosts || []
   );
+  const [publishedPosters, setPublishedPosters] = useState<GeneratedPoster[]>(
+    initialCache?.publishedPosters || []
+  );
+  const [brandSettings, setBrandSettings] = useState<BrandSettings>(
+    initialCache?.brandSettings || DEFAULT_BRAND_SETTINGS
+  );
   const [lecturers, setLecturers] = useState<UserProfile[]>([]);
   const [liveStats, setLiveStats] = useState<LiveInstitutionStats>({
     studentCount: null,
@@ -169,9 +193,15 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
   });
   const ownerCountsLoadedRef = useRef(false);
 
-  // Course Discovery filters & Comparison
+  // Course Discovery filters & Comparison (synced with /courses, /courses/certificate, /courses/diploma)
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<'All' | 'Certificate' | 'Diploma' | 'Free'>('All');
+  const [categoryFilter, setCategoryFilter] = useState<'All' | 'Certificate' | 'Diploma' | 'Free'>(
+    () => {
+      if (initialPage === 'courses' && initialParam === 'certificate') return 'Certificate';
+      if (initialPage === 'courses' && initialParam === 'diploma') return 'Diploma';
+      return 'All';
+    }
+  );
   const [domainFilter, setDomainFilter] = useState<string>('All');
   const [modeFilter, setModeFilter] = useState<'All' | 'Online' | 'Physical' | 'Hybrid'>('All');
   const [durationFilter, setDurationFilter] = useState<string>('All');
@@ -216,6 +246,8 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
       setCmsItems(payload.cmsItems);
       setShowcasePosts(payload.showcasePosts);
       setSpecialProgramme(payload.specialProgramme);
+      setPublishedPosters(payload.publishedPosters || []);
+      setBrandSettings(payload.brandSettings || DEFAULT_BRAND_SETTINGS);
       const uniqueDomains = new Set(payload.courses.map((c) => c.domain).filter(Boolean)).size;
       setLiveStats((prev) => ({
         ...prev,
@@ -255,7 +287,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
     void loadAuthorizedCounts();
   }, [isOwner]);
 
-  // Sync browser back/forward history across all 23 routes
+  // Sync browser back/forward history across all public routes
   useEffect(() => {
     const onPopState = () => {
       const parsed = parsePublicPathname(window.location.pathname, window.location.search);
@@ -265,6 +297,22 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
+
+  // Keep category filter synced with /courses, /courses/certificate, and /courses/diploma URLs
+  useEffect(() => {
+    if (page !== 'courses') return;
+    if (routeParam === 'certificate') {
+      setCategoryFilter('Certificate');
+    } else if (routeParam === 'diploma') {
+      setCategoryFilter('Diploma');
+    }
+  }, [page, routeParam]);
+
+  // Strict Public Visibility Guard: ONLY published courses appear on the public website
+  const publishedCourses = useMemo(
+    () => courses.filter((c) => c.status === 'published'),
+    [courses]
+  );
 
   // Build verified faculty list (Chief Trainer + live Firebase lecturers + real teaching divisions)
   const publicFaculty = useMemo<PublicFacultyProfile[]>(() => {
@@ -343,8 +391,11 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
   }, [specialProgramme, lecturers, courses]);
 
   const activeCourseDetail = useMemo(
-    () => (page === 'course-detail' ? courses.find((c) => c.id === routeParam) : undefined),
-    [page, routeParam, courses]
+    () =>
+      page === 'course-detail'
+        ? publishedCourses.find((c) => c.id === routeParam || c.slug === routeParam)
+        : undefined,
+    [page, routeParam, publishedCourses]
   );
 
   const activeLecturerDetail = useMemo(
@@ -400,7 +451,13 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
   const handleSelectCategoryCourses = (category: 'All' | 'Certificate' | 'Diploma' | 'Free') => {
     setCategoryFilter(category);
     setDomainFilter('All');
-    navigate('courses');
+    if (category === 'Certificate') {
+      navigate('courses', 'certificate');
+    } else if (category === 'Diploma') {
+      navigate('courses', 'diploma');
+    } else {
+      navigate('courses');
+    }
   };
 
   const handleApplyForCourse = (course: Course) => {
@@ -464,26 +521,26 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
 
   const availableDomains = useMemo(() => {
     const set = new Set<string>();
-    courses.forEach((c) => {
+    publishedCourses.forEach((c) => {
       if (c.domain) set.add(c.domain);
     });
     return ['All', ...Array.from(set).sort()];
-  }, [courses]);
+  }, [publishedCourses]);
 
   const availableDurations = useMemo(() => {
     const set = new Set<string>();
-    courses.forEach((c) => {
+    publishedCourses.forEach((c) => {
       if (c.duration) set.add(c.duration);
     });
     return ['All', ...Array.from(set).sort()];
-  }, [courses]);
+  }, [publishedCourses]);
 
   const filteredCourses = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const list = courses.filter((c) => {
+    const list = publishedCourses.filter((c) => {
       if (categoryFilter === 'Certificate' && c.category !== 'Certificate') return false;
       if (categoryFilter === 'Diploma' && c.category !== 'Diploma') return false;
-      if (categoryFilter === 'Free' && c.courseFeeLkr !== 0) return false;
+      if (categoryFilter === 'Free' && !c.isFree) return false;
       if (domainFilter !== 'All' && c.domain !== domainFilter) return false;
       if (modeFilter !== 'All' && c.mode !== modeFilter) return false;
       if (durationFilter !== 'All' && c.duration !== durationFilter) return false;
@@ -500,11 +557,11 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
     if (sortBy === 'fee-desc') return [...list].sort((a, b) => b.courseFeeLkr - a.courseFeeLkr);
     if (sortBy === 'name') return [...list].sort((a, b) => a.name.localeCompare(b.name));
     return list;
-  }, [courses, searchQuery, categoryFilter, domainFilter, modeFilter, durationFilter, sortBy]);
+  }, [publishedCourses, searchQuery, categoryFilter, domainFilter, modeFilter, durationFilter, sortBy]);
 
   const comparedCourses = useMemo(
-    () => courses.filter((c) => comparedCourseIds.includes(c.id)),
-    [courses, comparedCourseIds]
+    () => publishedCourses.filter((c) => comparedCourseIds.includes(c.id)),
+    [publishedCourses, comparedCourseIds]
   );
 
   const quickSearchResults = useMemo(() => {
@@ -554,7 +611,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
     return CAMPUS_GALLERY.filter((g) => g.category === galleryFilter);
   }, [galleryFilter]);
 
-  const isSignedIn = Boolean(firebaseUser && profile);
+  const isSignedIn = Boolean((firebaseUser || studentSessionToken) && profile);
 
   const handleGoogleSignIn = async () => {
     const ok = await signInWithGoogle();
@@ -729,22 +786,76 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
           />
         )}
 
-        {/* 4. /courses */}
+        {/* 4. /courses, /courses/certificate, /courses/diploma */}
         {page === 'courses' && (
           <section className="py-12 sm:py-16 bg-[#F5F7FA] dark:bg-[#0A1324]">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-slate-200 dark:border-slate-800">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1677FF] dark:text-sky-400">
-                    {INSTITUTE_INFO.officialName} · Official Catalogue
+                    {INSTITUTE_INFO.platformName} · 2027 Official Catalogue
                   </p>
                   <h1 className="mt-2 text-3xl sm:text-4xl font-extrabold tracking-tight text-[#101D35] dark:text-white">
-                    Course Discovery &amp; Comparison
+                    {categoryFilter === 'Certificate'
+                      ? 'Certificate Level Courses (2027)'
+                      : categoryFilter === 'Diploma'
+                        ? 'Diploma & International Diploma Courses (2027)'
+                        : categoryFilter === 'Free'
+                          ? 'Official 100% Free Certificate Courses'
+                          : '2027 Course Discovery & Comparison'}
                   </h1>
                   <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                    Showing {filteredCourses.length} of {courses.length} published Certificate &amp;
-                    International Diploma courses.
+                    Showing {filteredCourses.length} of {publishedCourses.length} published courses (
+                    {publishedCourses.filter((c) => c.category === 'Certificate').length} Certificate ·{' '}
+                    {publishedCourses.filter((c) => c.category === 'Diploma').length} Diploma ·{' '}
+                    {publishedCourses.filter((c) => c.isFree).length} FREE).
                   </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCategoryCourses('All')}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        categoryFilter === 'All'
+                          ? 'bg-[#101D35] text-white'
+                          : 'bg-[#EAF1FC] text-[#101D35] hover:bg-blue-100'
+                      }`}
+                    >
+                      All Courses ({publishedCourses.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCategoryCourses('Certificate')}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        categoryFilter === 'Certificate'
+                          ? 'bg-[#1677FF] text-white'
+                          : 'bg-[#EAF1FC] text-[#101D35] hover:bg-blue-100'
+                      }`}
+                    >
+                      Certificate Level ({publishedCourses.filter((c) => c.category === 'Certificate').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCategoryCourses('Diploma')}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        categoryFilter === 'Diploma'
+                          ? 'bg-[#1677FF] text-white'
+                          : 'bg-[#EAF1FC] text-[#101D35] hover:bg-blue-100'
+                      }`}
+                    >
+                      Diploma Level ({publishedCourses.filter((c) => c.category === 'Diploma').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCategoryCourses('Free')}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        categoryFilter === 'Free'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                      }`}
+                    >
+                      FREE Courses ({publishedCourses.filter((c) => c.isFree).length})
+                    </button>
+                  </div>
                 </div>
 
                 {comparedCourses.length > 0 && (
@@ -767,7 +878,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                 />
                 <FilterPanel
                   category={categoryFilter}
-                  onCategoryChange={setCategoryFilter}
+                  onCategoryChange={handleSelectCategoryCourses}
                   domain={domainFilter}
                   domains={availableDomains}
                   onDomainChange={setDomainFilter}
@@ -829,6 +940,16 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                 c.domain === activeCourseDetail.domain
             )}
             faculty={publicFaculty}
+            publishedPosters={publishedPosters.filter(
+              (p) =>
+                activeCourseDetail &&
+                p.status === 'published' &&
+                p.courseId === activeCourseDetail.id &&
+                (!p.publishDestinations ||
+                  p.publishDestinations.length === 0 ||
+                  p.publishDestinations.includes('public_course_page'))
+            )}
+            brandSettings={brandSettings}
             onNavigate={navigate}
             onApply={handleApplyForCourse}
           />
@@ -838,7 +959,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
         {page === 'programmes' && (
           <ProgrammesPage
             programme={specialProgramme}
-            freeCourses={courses.filter((c) => c.courseFeeLkr === 0)}
+            freeCourses={courses.filter((c) => Boolean(c.isFree))}
             onNavigate={navigate}
             onApply={handleApplyForCourse}
           />
@@ -879,7 +1000,14 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
         )}
 
         {/* 11. /campus */}
-        {page === 'campus' && <CampusPage branches={branches} onNavigate={navigate} />}
+        {page === 'campus' && (
+          <CampusPage
+            branches={branches}
+            courses={courses}
+            onNavigate={navigate}
+            onSelectDomain={handleSelectDomainCourses}
+          />
+        )}
 
         {/* 12. /gallery */}
         {page === 'gallery' && (
@@ -948,6 +1076,83 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                   </button>
                 ))}
               </div>
+
+              {(galleryFilter === 'All' || galleryFilter === 'Official Posters') &&
+                publishedPosters.filter(
+                  (p) =>
+                    p.status === 'published' &&
+                    (!p.publishDestinations ||
+                      p.publishDestinations.length === 0 ||
+                      p.publishDestinations.includes('website_marketing_library'))
+                ).length > 0 && (
+                  <div className="pt-8 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1677FF] dark:text-sky-400">
+                          Super Admin Approved &amp; Published
+                        </p>
+                        <h2 className="text-xl font-extrabold text-[#101D35] dark:text-white mt-1">
+                          Official Published Course Announcements
+                        </h2>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {publishedPosters
+                        .filter(
+                          (p) =>
+                            p.status === 'published' &&
+                            (!p.publishDestinations ||
+                              p.publishDestinations.length === 0 ||
+                              p.publishDestinations.includes('website_marketing_library'))
+                        )
+                        .map((p) => (
+                          <div
+                            key={p.id}
+                            className="rounded-2xl bg-white dark:bg-[#101D35] border border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-3 shadow-sm"
+                          >
+                            <div className="flex items-center justify-between gap-2 text-[11px]">
+                              <span className="font-bold uppercase tracking-wider text-[#1677FF] dark:text-sky-400">
+                                {p.badgeText || p.posterType}
+                              </span>
+                              <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
+                                Verified v{p.versionNumber}
+                              </span>
+                            </div>
+                            <h3 className="text-base font-extrabold text-[#101D35] dark:text-white leading-snug">
+                              {p.headline}
+                            </h3>
+                            {p.subheadline && (
+                              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                                {p.subheadline}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                              {p.feeLabel && (
+                                <span className="px-2.5 py-1 rounded-lg bg-[#EAF1FC] dark:bg-[#172A45]">
+                                  {p.feeLabel}
+                                </span>
+                              )}
+                              {p.durationLabel && (
+                                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800">
+                                  {p.durationLabel}
+                                </span>
+                              )}
+                            </div>
+                            {p.courseId && (
+                              <button
+                                type="button"
+                                onClick={() => navigate('course-detail', p.courseId)}
+                                className="mt-auto inline-flex items-center gap-1.5 text-xs font-bold text-[#1677FF] dark:text-sky-400 hover:underline cursor-pointer"
+                              >
+                                View Course &amp; Official Poster
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
             </div>
           </section>
         )}
@@ -1171,6 +1376,16 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                 </form>
               </div>
             </div>
+
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10">
+              <Suspense
+                fallback={
+                  <div className="h-[420px] rounded-3xl bg-white dark:bg-[#101D35] border border-slate-200 dark:border-slate-800 animate-pulse" />
+                }
+              >
+                <CampusMapsExplorer branches={branches} compact />
+              </Suspense>
+            </div>
           </section>
         )}
 
@@ -1181,7 +1396,12 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
             userDisplayName={profile?.displayName}
             userRole={profile?.role}
             authError={authError}
+            pendingPasswordChange={pendingPasswordChange}
             onGoogleSignIn={handleGoogleSignIn}
+            onStudentCredentialsLogin={signInWithStudentCredentials}
+            onCompleteFirstLoginPassword={completeFirstLoginPasswordChange}
+            onActivateAccount={activateStudentAccount}
+            onCancelPasswordChange={cancelPendingPasswordChange}
             onOpenPortal={onEnterPortal}
             onNavigate={navigate}
           />
@@ -1471,7 +1691,11 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                     <td className="py-3 pr-4 text-slate-500">Tuition Fee</td>
                     {comparedCourses.map((c) => (
                       <td key={c.id} className="py-3 px-4 font-mono font-bold text-[#1677FF] dark:text-sky-400">
-                        {c.courseFeeLkr === 0 ? '100% Free' : formatLkr(c.courseFeeLkr)}
+                        {c.isFree
+                          ? '100% Free'
+                          : c.feeConfigured === false
+                            ? 'Fee on Enquiry'
+                            : formatLkr(c.courseFeeLkr)}
                       </td>
                     ))}
                   </tr>

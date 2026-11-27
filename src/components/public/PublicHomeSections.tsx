@@ -142,7 +142,7 @@ export const PublicHomeSections: React.FC<PublicHomeSectionsProps> = React.memo(
     const list = courses.filter((c) => {
       if (courseCategory === 'Certificate' && c.category !== 'Certificate') return false;
       if (courseCategory === 'Diploma' && c.category !== 'Diploma') return false;
-      if (courseCategory === 'Free' && c.courseFeeLkr !== 0) return false;
+      if (courseCategory === 'Free' && !c.isFree) return false;
       if (courseDomain !== 'All' && c.domain !== courseDomain) return false;
       if (courseMode !== 'All' && c.mode !== courseMode) return false;
       if (courseDuration !== 'All' && c.duration !== courseDuration) return false;

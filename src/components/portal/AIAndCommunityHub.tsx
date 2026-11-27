@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { collection, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { auth, db } from '../../lib/firebase';
+import { useAuth } from '../../context/AuthContext';
 import { formatLkr, logAuditEvent, makeSafeId } from '../../lib/firestoreService';
 import { INSTITUTE_INFO } from '../../data/catalogSeed';
 import {
@@ -85,6 +86,7 @@ export const AIAndCommunityHub: React.FC<HubProps> = ({
   settings,
   onRefreshData,
 }) => {
+  const { getBearerToken, authMode } = useAuth();
   const [notice, setNotice] = useState<string | null>(null);
 
   // 1. TECHMAN AI TUTOR STATE (Private per-user history)
@@ -152,9 +154,14 @@ export const AIAndCommunityHub: React.FC<HubProps> = ({
     setTutorLoading(true);
     setNotice(null);
     try {
+      const idToken = await getBearerToken();
+      if (!idToken) throw new Error('Please sign in again to use TECHMAN AI Tutor.');
       const res = await fetch('/api/ai/tutor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           prompt: tutorPrompt,
           courseName: course?.name || 'General Programme',
@@ -176,7 +183,9 @@ export const AIAndCommunityHub: React.FC<HubProps> = ({
         response: String(data.answer || '').slice(0, 8000),
         createdAt: new Date().toISOString(),
       };
-      await setDoc(doc(db, 'aiConversations', convId), convDoc);
+      if (authMode === 'firebase') {
+        await setDoc(doc(db, 'aiConversations', convId), convDoc);
+      }
       setConversations((prev) => [convDoc, ...prev]);
       setTutorPrompt('');
     } catch (err) {
@@ -192,9 +201,14 @@ export const AIAndCommunityHub: React.FC<HubProps> = ({
     setCareerLoading(true);
     setNotice(null);
     try {
+      const idToken = await getBearerToken();
+      if (!idToken) throw new Error('Please sign in again to use AI Career Center.');
       const res = await fetch('/api/ai/career', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           tool: careerTool,
           studentName: profile.displayName,
@@ -207,22 +221,24 @@ export const AIAndCommunityHub: React.FC<HubProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'AI Career Center request failed.');
       setCareerOutput(data.result || '');
-      await setDoc(
-        doc(db, 'careerProfiles', profile.uid),
-        {
-          userId: profile.uid,
-          headline: targetRole.slice(0, 160),
-          targetRole: targetRole.slice(0, 120),
-          skills: skillsText
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)
-            .slice(0, 25),
-          aiResumeDraft: String(data.result || '').slice(0, 8000),
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+      if (authMode === 'firebase') {
+        await setDoc(
+          doc(db, 'careerProfiles', profile.uid),
+          {
+            userId: profile.uid,
+            headline: targetRole.slice(0, 160),
+            targetRole: targetRole.slice(0, 120),
+            skills: skillsText
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+              .slice(0, 25),
+            aiResumeDraft: String(data.result || '').slice(0, 8000),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Career AI failed.');
     } finally {
@@ -296,9 +312,14 @@ export const AIAndCommunityHub: React.FC<HubProps> = ({
     setAiMediaLoading(true);
     setNotice(null);
     try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Please sign in again to use AI Media Organizer.');
       const res = await fetch('/api/ai/media-organize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           imageBase64: mediaPreview,
           mimeType: mediaMime,

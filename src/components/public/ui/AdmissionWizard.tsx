@@ -395,9 +395,11 @@ export const AdmissionWizard: React.FC<AdmissionWizardProps> = ({
                       <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs">
                         <span className="text-slate-400">Tuition Fee</span>
                         <span className="font-mono font-bold text-sky-300">
-                          {selectedCourse.courseFeeLkr === 0
+                          {selectedCourse.isFree
                             ? '100% Free'
-                            : formatLkr(selectedCourse.courseFeeLkr)}
+                            : selectedCourse.feeConfigured === false
+                              ? 'Fee on Enquiry'
+                              : formatLkr(selectedCourse.courseFeeLkr)}
                         </span>
                       </div>
                     </div>
@@ -524,7 +526,11 @@ export const AdmissionWizard: React.FC<AdmissionWizardProps> = ({
                             {courses.map((c) => (
                               <option key={c.id} value={c.id}>
                                 {c.name} ({c.category} · {c.duration} ·{' '}
-                                {c.courseFeeLkr === 0 ? 'FREE' : formatLkr(c.courseFeeLkr)})
+                                {c.isFree
+                                  ? 'FREE'
+                                  : c.feeConfigured === false
+                                    ? 'Fee on Enquiry'
+                                    : formatLkr(c.courseFeeLkr)})
                               </option>
                             ))}
                           </select>
@@ -544,9 +550,11 @@ export const AdmissionWizard: React.FC<AdmissionWizardProps> = ({
                               <span>Registration Fee: {formatLkr(selectedCourse.registrationFeeLkr)}</span>
                               <span>
                                 Tuition:{' '}
-                                {selectedCourse.courseFeeLkr === 0
+                                {selectedCourse.isFree
                                   ? '100% Free'
-                                  : formatLkr(selectedCourse.courseFeeLkr)}
+                                  : selectedCourse.feeConfigured === false
+                                    ? 'Fee on Enquiry'
+                                    : formatLkr(selectedCourse.courseFeeLkr)}
                               </span>
                             </div>
                           </div>

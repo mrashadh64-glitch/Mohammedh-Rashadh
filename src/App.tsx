@@ -38,14 +38,15 @@ const PortalLoadingSkeleton: React.FC = () => (
 );
 
 const TechmanAppContent: React.FC = () => {
-  const { firebaseUser, profile, loading } = useAuth();
+  const { firebaseUser, studentSessionToken, profile, loading } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const urlContext = useMemo(() => {
     const parsed = parsePublicPathname(window.location.pathname, window.location.search);
     const params = new URLSearchParams(window.location.search);
+    const hasActivationToken = Boolean(params.get('activate'));
     return {
-      initialPage: parsed.page,
+      initialPage: hasActivationToken ? ('student-login' as PublicPage) : parsed.page,
       initialParam: parsed.param || '',
       verify: parsed.page === 'verify' ? parsed.param || params.get('verify') || '' : '',
     };
@@ -54,6 +55,14 @@ const TechmanAppContent: React.FC = () => {
   const [surface, setSurface] = useState<'public' | 'portal'>('public');
   const [requestedPublicPage, setRequestedPublicPage] = useState<PublicPage>(urlContext.initialPage);
   const [requestedParam, setRequestedParam] = useState<string>(urlContext.initialParam);
+  const [mapsQuotaExceeded, setMapsQuotaExceeded] = useState(false);
+
+  // Listen for Google Maps Platform Demo Key quota/auth events at top level so banner persists across views
+  useEffect(() => {
+    const handleQuotaExceeded = () => setMapsQuotaExceeded(true);
+    window.addEventListener('gmp-quota-exceeded', handleQuotaExceeded);
+    return () => window.removeEventListener('gmp-quota-exceeded', handleQuotaExceeded);
+  }, []);
 
   // Run connectivity check lazily after initial paint (never blocking FCP/LCP)
   useEffect(() => {
@@ -70,16 +79,33 @@ const TechmanAppContent: React.FC = () => {
   }, []);
 
   // Automatically return to Public Website if user signs out while inside portal
+  const isAuthenticated = Boolean((firebaseUser || studentSessionToken) && profile);
   useEffect(() => {
-    if (!loading && !firebaseUser && surface === 'portal') {
+    if (!loading && !isAuthenticated && surface === 'portal') {
       setSurface('public');
     }
-  }, [loading, firebaseUser, surface]);
+  }, [loading, isAuthenticated, surface]);
 
-  const showPortal = surface === 'portal' && Boolean(firebaseUser && profile);
+  const showPortal = surface === 'portal' && isAuthenticated;
 
   return (
     <>
+      {mapsQuotaExceeded && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
+          <span>
+            Google Maps Platform quota reached. If you are the app owner, visit{' '}
+            <a
+              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-semibold text-amber-950 hover:text-amber-800"
+            >
+              maps developer site
+            </a>{' '}
+            for instructions to update your account.
+          </span>
+        </div>
+      )}
       {showPortal ? (
         <Suspense fallback={<PortalLoadingSkeleton />}>
           <PortalShell

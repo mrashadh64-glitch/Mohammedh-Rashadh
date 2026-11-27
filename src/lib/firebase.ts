@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import {
@@ -13,6 +14,21 @@ import {
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
+
+const recaptchaSiteKey =
+  typeof (firebaseConfig as { recaptchaSiteKey?: string }).recaptchaSiteKey === 'string'
+    ? (firebaseConfig as { recaptchaSiteKey?: string }).recaptchaSiteKey!.trim()
+    : '';
+if (typeof window !== 'undefined' && recaptchaSiteKey.length > 10) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch {
+    // Non-blocking fallback if App Check is already initialized
+  }
+}
 
 function createOptimizedFirestore(): Firestore {
   try {

@@ -109,18 +109,30 @@ export interface Branch {
 export interface Course {
   id: string;
   code: string;
+  slug?: string;
   name: string;
   category: 'Certificate' | 'Diploma';
   domain?: string;
   description?: string;
   imageUrl?: string;
+  bannerUrl?: string;
   level?: string;
   duration: string;
   mode: 'Online' | 'Physical' | 'Hybrid';
   courseFeeLkr: number;
+  feeConfigured?: boolean;
+  isFree?: boolean;
+  currency?: string;
   registrationFeeLkr?: number;
   certificateFeeLkr?: number;
   installmentPlan?: string;
+  courseLanguage?: string;
+  branchIds?: string[];
+  admissionStatus?: 'open' | 'closing_soon' | 'closed' | 'upcoming';
+  academicYear?: string;
+  featured?: boolean;
+  seoTitle?: string;
+  seoDescription?: string;
   lecturerId?: string;
   lecturerName?: string;
   batchName?: string;
@@ -707,6 +719,7 @@ export interface LeadImportBatch {
   id: string;
   fileName: string;
   sheetName?: string;
+  batchFingerprint?: string;
   totalRows: number;
   importedCount: number;
   mergedCount: number;
@@ -837,5 +850,401 @@ export interface ModuleProgressRecord {
   institutionId: string;
   updatedAt: string;
 }
+
+// ============================================================
+// MODULE 3: AI POSTER AUTOMATION, BRAND SETTINGS & CAMPAIGNS
+// ============================================================
+
+export type PosterSizePreset =
+  | 'instagram_square'
+  | 'instagram_portrait'
+  | 'instagram_story'
+  | 'facebook_landscape'
+  | 'a4_print'
+  | 'website_banner'
+  | 'whatsapp_promo';
+
+export type PosterType =
+  | 'Course Admission Poster'
+  | 'Free Course Poster'
+  | 'Diploma Course Poster'
+  | 'Certificate Course Poster'
+  | 'Scholarship / Promotion Poster'
+  | 'Registration Announcement Poster'
+  | 'Social Media Ad Creative'
+  | 'Instagram Post'
+  | 'Instagram Story'
+  | 'Facebook Post'
+  | 'WhatsApp Promotion Poster'
+  | 'Website Banner';
+
+export type PosterTemplateStyle =
+  | 'navy_executive'
+  | 'electric_tech'
+  | 'free_spotlight'
+  | 'editorial_minimal';
+
+export type PosterLanguage = 'English' | 'Tamil' | 'Sinhala' | 'Arabic';
+
+export interface BrandSettings {
+  institutionId: string;
+  brandName: string;
+  shortName: string;
+  tagline: string;
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  lightSurfaceColor: string;
+  logoUrl: string;
+  altLogoUrl?: string;
+  founderPhotoUrl?: string;
+  contactPhone: string;
+  whatsappNumber: string;
+  website: string;
+  email: string;
+  defaultFooterNote: string;
+  updatedByUid?: string;
+  updatedAt?: string;
+}
+
+export type PosterWorkflowStatus =
+  | 'draft'
+  | 'pending_approval'
+  | 'changes_requested'
+  | 'approved'
+  | 'rejected'
+  | 'published'
+  | 'needs_update'
+  | 'archived';
+
+export interface PosterValidationCheck {
+  code: string;
+  label: string;
+  passed: boolean;
+  severity: 'error' | 'warning';
+  message: string;
+}
+
+export interface PosterValidationResult {
+  passed: boolean;
+  checkedAt: string;
+  errors: string[];
+  warnings: string[];
+  checks: PosterValidationCheck[];
+}
+
+export interface GeneratedPoster {
+  id: string;
+  courseId?: string;
+  courseName?: string;
+  courseCode?: string;
+  courseCategory?: 'Certificate' | 'Diploma' | 'General';
+  isFreeCourse?: boolean;
+  title: string;
+  posterType: PosterType;
+  templateStyle: PosterTemplateStyle;
+  sizePreset: PosterSizePreset;
+  language: PosterLanguage;
+  headline: string;
+  subheadline?: string;
+  badgeText?: string;
+  highlights: string[];
+  feeLabel?: string;
+  registrationFeeLabel?: string;
+  durationLabel?: string;
+  modeLabel?: string;
+  ctaText: string;
+  footerContact?: string;
+  backgroundImageUrl?: string;
+  customLogoUrl?: string;
+  logoPosition: 'top-left' | 'top-right' | 'top-center';
+  accentColor?: string;
+  fontScale?: number;
+  fontFamily?: 'inter' | 'geometric' | 'serif' | 'mono';
+  textAlign?: 'left' | 'center';
+  headlineOffsetY?: number;
+  bgOpacity?: number;
+  socialCaption?: string;
+  hashtags?: string[];
+  whatsappMessage?: string;
+  status: PosterWorkflowStatus;
+  versionNumber: number;
+  contentHash?: string;
+  approvedVersionNumber?: number;
+  approvedContentHash?: string;
+  validationPassed?: boolean;
+  validationSummary?: string;
+  rejectionReason?: string;
+  changeInstructions?: string;
+  courseSnapshotHash?: string;
+  courseSnapshotUpdatedAt?: string;
+  campaignId?: string;
+  generatedByProvider?: string;
+  publishDestinations?: string[];
+  scheduledPublishAt?: string;
+  createdByUid: string;
+  createdByName: string;
+  createdByRole?: string;
+  approvedByUid?: string;
+  approvedByName?: string;
+  approvedAt?: string;
+  publishedByUid?: string;
+  publishedByName?: string;
+  publishedAt?: string;
+  institutionId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PosterVersion {
+  id: string;
+  posterId: string;
+  versionNumber: number;
+  headline: string;
+  subheadline?: string;
+  templateStyle: PosterTemplateStyle;
+  sizePreset: PosterSizePreset;
+  language: PosterLanguage;
+  highlights: string[];
+  ctaText: string;
+  socialCaption?: string;
+  contentHash?: string;
+  validationPassed?: boolean;
+  validationSummary?: string;
+  editableDesignDataJson?: string;
+  changeNote?: string;
+  createdByUid: string;
+  createdByName: string;
+  institutionId: string;
+  createdAt: string;
+}
+
+export interface PosterApprovalLog {
+  id: string;
+  posterId: string;
+  posterTitle?: string;
+  courseName?: string;
+  versionNumber: number;
+  action:
+    | 'submitted_for_approval'
+    | 'approved'
+    | 'rejected'
+    | 'changes_requested'
+    | 'approval_invalidated'
+    | 'archived';
+  reason?: string;
+  performedByUid: string;
+  performedByName: string;
+  performedByEmail: string;
+  institutionId: string;
+  timestamp: string;
+}
+
+export interface PosterPublishingLog {
+  id: string;
+  posterId: string;
+  posterTitle?: string;
+  courseId?: string;
+  versionNumber: number;
+  destination:
+    | 'website_marketing_library'
+    | 'public_course_page'
+    | 'download_png'
+    | 'download_jpg'
+    | 'download_pdf'
+    | 'export_whatsapp'
+    | 'export_social_media'
+    | 'scheduled_campaign';
+  scheduledFor?: string;
+  publishedByUid: string;
+  publishedByName: string;
+  publishedByEmail: string;
+  institutionId: string;
+  timestamp: string;
+}
+
+export interface MarketingCampaign {
+  id: string;
+  name: string;
+  campaignType: 'free_courses' | 'certificate_intake' | 'diploma_intake' | 'custom_bulk';
+  courseIds: string[];
+  posterIds: string[];
+  language: PosterLanguage;
+  status: 'draft' | 'pending_approval' | 'approved' | 'published' | 'archived';
+  summary?: string;
+  createdByUid: string;
+  createdByName: string;
+  institutionId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================
+// MODULE 4: CENTRALIZED AI INTEGRATIONS & AUTOMATION WORKFLOWS
+// ============================================================
+
+export type IntegrationProviderId =
+  | 'openai'
+  | 'apify'
+  | 'gemini_ai'
+  | 'google_sheets'
+  | 'firebase'
+  | 'email_provider'
+  | 'whatsapp_business'
+  | 'analytics';
+
+export interface IntegrationConfig {
+  id: IntegrationProviderId;
+  provider: IntegrationProviderId;
+  label: string;
+  category: 'AI & LLM' | 'Automation & Research' | 'Data & Storage' | 'Messaging & Analytics';
+  enabled: boolean;
+  defaultModel?: string;
+  temperature?: number;
+  maxTokens?: number;
+  monthlyBudgetUsd?: number;
+  allowedFeatures?: string[];
+  defaultActorId?: string;
+  connectionStatus: 'not_configured' | 'connected' | 'error' | 'testing';
+  lastTestedAt?: string;
+  lastError?: string;
+  notes?: string;
+  updatedByUid?: string;
+  institutionId: string;
+  updatedAt?: string;
+}
+
+export interface IntegrationLog {
+  id: string;
+  provider: IntegrationProviderId;
+  action: string;
+  status: 'success' | 'error' | 'not_configured';
+  modelOrActor?: string;
+  durationMs?: number;
+  summary: string;
+  actorUid: string;
+  actorEmail: string;
+  institutionId: string;
+  createdAt: string;
+}
+
+export interface ApifyRunRecord {
+  id: string;
+  actorId: string;
+  runId: string;
+  datasetId?: string;
+  purpose: string;
+  status: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'ABORTED' | 'QUEUED';
+  itemCount?: number;
+  previewJson?: string;
+  reviewedByUid?: string;
+  startedByUid: string;
+  startedByEmail: string;
+  institutionId: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface AutomationWorkflow {
+  id: string;
+  workflowKey:
+    | 'new_course_poster'
+    | 'course_update_detector'
+    | 'free_course_campaign'
+    | 'bulk_campaign_package';
+  name: string;
+  description: string;
+  enabled: boolean;
+  requiresAdminApproval: boolean;
+  defaultLanguage: PosterLanguage;
+  defaultSizePreset: PosterSizePreset;
+  lastTriggeredAt?: string;
+  lastRunSummary?: string;
+  institutionId: string;
+  updatedAt?: string;
+}
+
+// ============================================================
+// MODULE 5: STUDENT ACCOUNTS, EMAIL LOGS & SYLLABUS AUDIT LOGS
+// ============================================================
+
+export type StudentAccountStatus =
+  | 'Not Created'
+  | 'Invitation Sent'
+  | 'Active'
+  | 'Suspended'
+  | 'Password Reset Required';
+
+export interface StudentAccountRecord {
+  id: string;
+  studentId: string;
+  username: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  courseId?: string;
+  courseName?: string;
+  batchName?: string;
+  branchId?: string;
+  linkedUserUid?: string;
+  linkedMigratedId?: string;
+  status: StudentAccountStatus;
+  mustChangePassword: boolean;
+  invitationSentAt?: string;
+  invitationCount?: number;
+  passwordUpdatedAt?: string;
+  lastLoginAt?: string;
+  createdByUid: string;
+  createdByEmail: string;
+  institutionId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type EmailNotificationType =
+  | 'student_account_created'
+  | 'login_credentials'
+  | 'password_reset'
+  | 'admission_confirmation'
+  | 'syllabus_updated'
+  | 'academic_announcement';
+
+export interface EmailLogRecord {
+  id: string;
+  emailType: EmailNotificationType;
+  recipientEmail: string;
+  recipientName?: string;
+  studentId?: string;
+  courseId?: string;
+  subject: string;
+  bodyPreview: string;
+  provider: 'resend' | 'smtp' | 'sandbox_outbox';
+  status: 'sent' | 'failed' | 'queued_configure_provider';
+  errorMessage?: string;
+  retryCount: number;
+  sentByUid: string;
+  sentByEmail: string;
+  institutionId: string;
+  sentAt?: string;
+  createdAt: string;
+}
+
+export interface SyllabusApprovalLog {
+  id: string;
+  syllabusId: string;
+  courseId: string;
+  courseName: string;
+  previousVersionNumber: number;
+  versionNumber: number;
+  action: 'submitted_for_approval' | 'approved' | 'published' | 'archived' | 'restored' | 'rejected';
+  changeDescription: string;
+  performedByUid: string;
+  performedByName: string;
+  performedByEmail: string;
+  institutionId: string;
+  timestamp: string;
+}
+
+
 
 

@@ -11,6 +11,7 @@ import {
   Eye,
   FileCheck2,
   FileText,
+  GripVertical,
   History,
   Layers,
   Link2,
@@ -27,7 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { auth, db } from '../../lib/firebase';
 import { logAuditEvent, makeSafeId } from '../../lib/firestoreService';
 import {
   ALLOWED_SYLLABUS_EXTENSIONS,
@@ -42,6 +43,7 @@ import {
 import { INSTITUTE_INFO } from '../../data/catalogSeed';
 import {
   Course,
+  SyllabusApprovalLog,
   SyllabusApprovalStatus,
   SyllabusAttachment,
   SyllabusModule,
@@ -67,6 +69,7 @@ interface SyllabusManagementHubProps {
   courses: Course[];
   syllabuses: SyllabusRecord[];
   syllabusVersions: SyllabusVersionRecord[];
+  syllabusApprovalLogs?: SyllabusApprovalLog[];
   onNavigateTab: (tab: string) => void;
   onRefreshData: () => Promise<void>;
 }
@@ -128,9 +131,68 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
   courses,
   syllabuses,
   syllabusVersions,
+  syllabusApprovalLogs = [],
   onNavigateTab,
   onRefreshData,
 }) => {
+  const writeSyllabusApprovalLog = async (entry: {
+    syllabusId: string;
+    versionId?: string;
+    courseId: string;
+    courseName: string;
+    previousVersionNumber: number;
+    versionNumber: number;
+    action: SyllabusApprovalLog['action'];
+    changeDescription: string;
+  }) => {
+    try {
+      const logId = makeSafeId('SYLLOG');
+      await setDoc(doc(db, 'syllabusApprovalLogs', logId), {
+        syllabusId: entry.syllabusId.slice(0, 128),
+        courseId: entry.courseId.slice(0, 128),
+        courseName: entry.courseName.slice(0, 160),
+        previousVersionNumber: Number(entry.previousVersionNumber || 0),
+        versionNumber: Number(entry.versionNumber || 1),
+        action: entry.action,
+        changeDescription: (entry.changeDescription || 'Syllabus revision logged').slice(0, 600),
+        performedByUid: profile.uid,
+        performedByName: (profile.displayName || userEmail || 'Staff').slice(0, 120),
+        performedByEmail: (userEmail || INSTITUTE_INFO.publicEmail).slice(0, 160),
+        institutionId: INSTITUTE_INFO.institutionId,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn('Syllabus approval log warning:', err);
+    }
+  };
+
+  const notifySyllabusPublishedEmail = async (params: {
+    courseName: string;
+    versionNumber: number;
+    changeSummary: string;
+  }) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+      await fetch('/api/emails/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          emailType: 'syllabus_updated',
+          toEmail: userEmail || INSTITUTE_INFO.publicEmail,
+          toName: `${params.courseName} Enrolled Cohort`,
+          courseName: params.courseName,
+          versionNumber: params.versionNumber,
+          changeSummary: params.changeSummary,
+        }),
+      });
+    } catch (err) {
+      console.warn('Syllabus update email warning:', err);
+    }
+  };
   const canApprovePublish =
     isOwner || ['SUPER_ADMIN', 'ADMIN', 'ACADEMIC_MANAGER'].includes(profile.role);
   const canAuthorDraft = canApprovePublish || profile.role === 'LECTURER';
@@ -138,7 +200,9 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
   // Shared course focus across views
   const [selectedCourseId, setSelectedCourseId] = useState<string>(courses[0]?.id || '');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | SyllabusApprovalStatus>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'No Syllabus' | SyllabusApprovalStatus>('All');
+  const [draggedModIdx, setDraggedModIdx] = useState<number | null>(null);
+  const [dragOverModIdx, setDragOverModIdx] = useState<number | null>(null);
   const [banner, setBanner] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(
     null
   );
@@ -530,7 +594,32 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
         await setDoc(doc(db, 'syllabuses', syllabusDocId), masterPayload);
       }
 
-      // 4. Write immutable audit trail
+      // 4. Write immutable syllabus approval log + audit trail
+      await writeSyllabusApprovalLog({
+        syllabusId: syllabusCode,
+        versionId: versionDocId,
+        courseId: selectedCourse.id,
+        courseName: selectedCourse.name,
+        previousVersionNumber: activeSyllabus?.publishedVersionNumber || maxExistingVer || 0,
+        versionNumber: nextVersionNumber,
+        action: options?.restoredFromVersion
+          ? 'restored'
+          : targetStatus === 'Published'
+          ? 'published'
+          : targetStatus === 'Approved'
+          ? 'approved'
+          : 'submitted_for_approval',
+        changeDescription: summaryText,
+      });
+
+      if (targetStatus === 'Published') {
+        void notifySyllabusPublishedEmail({
+          courseName: selectedCourse.name,
+          versionNumber: nextVersionNumber,
+          changeSummary: summaryText,
+        });
+      }
+
       await logAuditEvent({
         actorUid: profile.uid,
         actorEmail: userEmail,
@@ -556,7 +645,7 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
         type: 'success',
         message:
           targetStatus === 'Published'
-            ? `Published ${selectedCourse.code} Syllabus v${nextVersionNumber}. Enrolled students now see this approved version.`
+            ? `Published ${selectedCourse.code} Syllabus v${nextVersionNumber}. Enrolled students now see this approved version & update notice logged.`
             : targetStatus === 'Pending Review'
             ? `Submitted ${selectedCourse.code} Syllabus v${nextVersionNumber} for Admin / Academic Manager review.`
             : `Saved ${selectedCourse.code} Syllabus Draft v${nextVersionNumber}.`,
@@ -565,6 +654,57 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
       setBanner({
         type: 'error',
         message: err instanceof Error ? err.message : 'Unable to save syllabus revision.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Explicit Admin Approval step (Pending Review -> Approved, ready to Publish later)
+  const handleApproveOnlyVersion = async (ver: SyllabusVersionRecord) => {
+    if (!canApprovePublish) return;
+    setBusy(true);
+    setBanner(null);
+    try {
+      const now = new Date().toISOString();
+      const existingMaster = syllabusByCourseId.get(ver.courseId);
+      await updateDoc(doc(db, 'syllabusVersions', ver.id), {
+        status: 'Approved',
+        approvedByUid: profile.uid,
+        approvedByName: profile.displayName.slice(0, 120),
+        updatedAt: now,
+      });
+
+      await writeSyllabusApprovalLog({
+        syllabusId: ver.syllabusId,
+        versionId: ver.id,
+        courseId: ver.courseId,
+        courseName: ver.courseName,
+        previousVersionNumber: existingMaster?.publishedVersionNumber || Math.max(0, ver.versionNumber - 1),
+        versionNumber: ver.versionNumber,
+        action: 'approved',
+        changeDescription: `Approved v${ver.versionNumber} (staged ready for publishing): ${ver.changeSummary || 'Syllabus update'}`,
+      });
+
+      await logAuditEvent({
+        actorUid: profile.uid,
+        actorEmail: userEmail,
+        actorRole: profile.role,
+        action: 'SYLLABUS_APPROVED',
+        targetType: 'syllabusVersions',
+        targetId: ver.id,
+        details: `Approved ${ver.courseName} syllabus v${ver.versionNumber} (ready to publish)`,
+      });
+
+      await onRefreshData();
+      setBanner({
+        type: 'success',
+        message: `Approved ${ver.courseName} (v${ver.versionNumber}). You can now publish it to enrolled students whenever ready.`,
+      });
+    } catch (err) {
+      setBanner({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Unable to approve syllabus version.',
       });
     } finally {
       setBusy(false);
@@ -638,6 +778,23 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
 
       await setDoc(doc(db, 'syllabuses', syllabusDocId), masterPayload);
 
+      await writeSyllabusApprovalLog({
+        syllabusId: ver.syllabusId,
+        versionId: ver.id,
+        courseId: ver.courseId,
+        courseName: ver.courseName,
+        previousVersionNumber: existingMaster?.publishedVersionNumber || Math.max(0, ver.versionNumber - 1),
+        versionNumber: ver.versionNumber,
+        action: 'published',
+        changeDescription: ver.changeSummary || `Published approved syllabus v${ver.versionNumber}`,
+      });
+
+      void notifySyllabusPublishedEmail({
+        courseName: ver.courseName,
+        versionNumber: ver.versionNumber,
+        changeSummary: ver.changeSummary || `Syllabus v${ver.versionNumber} is now live.`,
+      });
+
       await logAuditEvent({
         actorUid: profile.uid,
         actorEmail: userEmail,
@@ -651,7 +808,7 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
       await onRefreshData();
       setBanner({
         type: 'success',
-        message: `Approved and published ${ver.courseName} (v${ver.versionNumber}). Prior published version archived safely.`,
+        message: `Approved and published ${ver.courseName} (v${ver.versionNumber}). Prior published version archived safely & syllabus update notification dispatched.`,
       });
     } catch (err) {
       setBanner({
@@ -800,6 +957,68 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
     setModules((prev) => reorderSyllabusModules(prev, index, index + direction));
   };
 
+  const handleDropModule = (targetIdx: number) => {
+    if (draggedModIdx !== null && draggedModIdx !== targetIdx) {
+      setModules((prev) => reorderSyllabusModules(prev, draggedModIdx, targetIdx));
+    }
+    setDraggedModIdx(null);
+    setDragOverModIdx(null);
+  };
+
+  const handleDownloadSyllabusPdfTemplate = () => {
+    const lines = [
+      'TECHMAN AI INSTITUTE & ACADEMY - OFFICIAL SYLLABUS TEMPLATE (2027)',
+      '==================================================================',
+      'Course Title: [Enter Verified 2027 Course Name]',
+      'Course Code: [e.g. TM-CERT-AI-27]  |  Level: [Certificate / Diploma]',
+      'Total Duration: [e.g. 6 Months]    |  Delivery Mode: [Online / Physical / Hybrid]',
+      '',
+      'MODULE 01: FOUNDATIONS & INDUSTRY OVERVIEW (2 Weeks)',
+      '  - Learning Outcomes: Understand core principles and practical workflow.',
+      '  - Topics: 1.1 Introduction, 1.2 Essential Tools, 1.3 Practical Lab 01',
+      '  - Assignment: Module 01 Applied Exercise',
+      '',
+      'MODULE 02: CORE APPLIED SKILLS & PROJECTS (4 Weeks)',
+      '  - Learning Outcomes: Build production-grade deliverables independently.',
+      '  - Topics: 2.1 Core Techniques, 2.2 Industry Standards, 2.3 Portfolio Project',
+      '',
+      'FINAL ASSESSMENT & CERTIFICATION CRITERIA:',
+      '  - Practical Capstone Project + Competency Evaluation (60% minimum pass).',
+      '  - Approved by TECHMAN Academic Council before publication to students.',
+    ];
+    const escapePdfText = (s: string) => s.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    let stream = 'BT\n/F1 11 Tf\n48 760 Td\n16 TL\n';
+    lines.forEach((line, i) => {
+      stream += `${i === 0 ? '' : 'T* '}(${escapePdfText(line)}) Tj\n`;
+    });
+    stream += 'ET';
+    const encoder = new TextEncoder();
+    const parts: string[] = ['%PDF-1.4\n'];
+    const offsets: number[] = [];
+    const addObj = (id: number, body: string) => {
+      offsets.push(parts.reduce((sum, p) => sum + encoder.encode(p).length, 0));
+      parts.push(`${id} 0 obj\n${body}\nendobj\n`);
+    };
+    addObj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    addObj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+    addObj(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>');
+    addObj(4, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    addObj(5, `<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`);
+    const xrefStart = parts.reduce((sum, p) => sum + encoder.encode(p).length, 0);
+    let xref = `xref\n0 ${offsets.length + 1}\n0000000000 65535 f \n`;
+    offsets.forEach((off) => {
+      xref += `${String(off).padStart(10, '0')} 00000 n \n`;
+    });
+    parts.push(`${xref}trailer\n<< /Size ${offsets.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+    const blob = new Blob(parts, { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'TECHMAN_COLLEGE_SYLLABUS_TEMPLATE.pdf';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleSaveEditedModule = (updated: SyllabusModule) => {
     setModules((prev) => {
       const exists = prev.some((m) => m.id === updated.id);
@@ -826,16 +1045,20 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
     const published = syllabuses.filter((s) => s.publishedStatus === 'published').length;
     const pendingReview = syllabusVersions.filter((v) => v.status === 'Pending Review').length;
     const drafts = syllabusVersions.filter((v) => v.status === 'Draft').length;
+    const archivedVersions = syllabusVersions.filter((v) => v.status === 'Archived').length;
     const withFiles = syllabuses.filter((s) => s.hasFileAttachment).length;
+    const withoutSyllabus = courses.filter((c) => !syllabusByCourseId.has(c.id)).length;
     return {
       totalSyllabuses: syllabuses.length,
       published,
       pendingReview,
       drafts,
+      archivedVersions,
+      withoutSyllabus,
       withFiles,
       totalVersions: syllabusVersions.length,
     };
-  }, [syllabuses, syllabusVersions]);
+  }, [syllabuses, syllabusVersions, courses, syllabusByCourseId]);
 
   const pendingVersions = useMemo(
     () => syllabusVersions.filter((v) => v.status === 'Pending Review'),
@@ -900,6 +1123,14 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
               <button
+                type="button"
+                onClick={handleDownloadSyllabusPdfTemplate}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-emerald-600" />
+                Syllabus PDF Template
+              </button>
+              <button
                 onClick={() => onNavigateTab('syllabus-upload')}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
               >
@@ -917,33 +1148,45 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
           </div>
 
           {/* KPI Strip */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-              <div className="text-xs text-slate-500 dark:text-slate-400">Configured Syllabuses</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Configured</div>
               <div className="mt-1.5 text-2xl font-bold font-mono tabular-nums text-[#101D35] dark:text-white">
                 {kpis.totalSyllabuses}
                 <span className="text-xs font-normal text-slate-400 ml-1">/ {courses.length}</span>
               </div>
-              <div className="mt-1 text-[11px] text-slate-500">
-                {kpis.withFiles} with uploaded documents
-              </div>
+              <div className="mt-1 text-[11px] text-slate-500">{kpis.withFiles} with files</div>
             </div>
             <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-              <div className="text-xs text-slate-500 dark:text-slate-400">Published to Students</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Published Live</div>
               <div className="mt-1.5 text-2xl font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-400">
                 {kpis.published}
               </div>
-              <div className="mt-1 text-[11px] text-slate-500">Enrolled-only LMS visibility</div>
+              <div className="mt-1 text-[11px] text-slate-500">Enrolled-only LMS</div>
             </div>
             <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-              <div className="text-xs text-slate-500 dark:text-slate-400">Pending Review Queue</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Pending Review</div>
               <div className="mt-1.5 text-2xl font-bold font-mono tabular-nums text-amber-600 dark:text-amber-400">
                 {kpis.pendingReview}
               </div>
-              <div className="mt-1 text-[11px] text-slate-500">Awaiting Academic Manager sign-off</div>
+              <div className="mt-1 text-[11px] text-slate-500">Approval queue</div>
             </div>
             <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-              <div className="text-xs text-slate-500 dark:text-slate-400">Immutable Revisions</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Without Syllabus</div>
+              <div className="mt-1.5 text-2xl font-bold font-mono tabular-nums text-rose-600 dark:text-rose-400">
+                {kpis.withoutSyllabus}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500">Catalog topics only</div>
+            </div>
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="text-xs text-slate-500 dark:text-slate-400">Archived Versions</div>
+              <div className="mt-1.5 text-2xl font-bold font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                {kpis.archivedVersions}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500">Restorable history</div>
+            </div>
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="text-xs text-slate-500 dark:text-slate-400">Total Revisions</div>
               <div className="mt-1.5 text-2xl font-bold font-mono tabular-nums text-[#1677FF]">
                 {kpis.totalVersions}
               </div>
@@ -1006,6 +1249,13 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
                       </button>
                       <button
                         disabled={busy}
+                        onClick={() => void handleApproveOnlyVersion(ver)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-[#EAF1FC] dark:bg-blue-950/40 text-[#1677FF] dark:text-blue-300 text-xs font-semibold cursor-pointer disabled:opacity-50"
+                      >
+                        Approve (Hold)
+                      </button>
+                      <button
+                        disabled={busy}
                         onClick={() => void handleApproveAndPublishVersion(ver)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
                       >
@@ -1032,7 +1282,7 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
               />
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {(['All', 'Published', 'Pending Review', 'Draft', 'Archived'] as const).map((st) => (
+              {(['All', 'Published', 'Pending Review', 'Draft', 'Archived', 'No Syllabus'] as const).map((st) => (
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
@@ -1066,7 +1316,9 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
                   {courses
                     .filter((c) => {
                       const syl = syllabusByCourseId.get(c.id);
-                      if (statusFilter !== 'All') {
+                      if (statusFilter === 'No Syllabus') {
+                        if (syl) return false;
+                      } else if (statusFilter !== 'All') {
                         if (!syl) return false;
                         if (syl.approvalStatus !== statusFilter) return false;
                       }
@@ -1751,11 +2003,35 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
               {modules.map((mod, idx) => (
                 <div
                   key={mod.id}
-                  className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5"
+                  draggable
+                  onDragStart={() => setDraggedModIdx(idx)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (dragOverModIdx !== idx) setDragOverModIdx(idx);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleDropModule(idx);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedModIdx(null);
+                    setDragOverModIdx(null);
+                  }}
+                  className={`rounded-xl border bg-white dark:bg-slate-900 p-5 transition ${
+                    dragOverModIdx === idx && draggedModIdx !== idx
+                      ? 'border-[#1677FF] ring-2 ring-[#1677FF]/30'
+                      : 'border-slate-200 dark:border-slate-800'
+                  }`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          title="Drag to reorder module"
+                          className="inline-flex items-center text-slate-400 hover:text-[#1677FF] cursor-grab active:cursor-grabbing"
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </span>
                         <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[#EAF1FC] text-[#1677FF] dark:bg-blue-950/60 dark:text-blue-300 tabular-nums">
                           Module {String(mod.moduleNumber).padStart(2, '0')}
                         </span>
@@ -2076,6 +2352,83 @@ export const SyllabusManagementHub: React.FC<SyllabusManagementHubProps> = ({
               </div>
             </div>
           )}
+
+          {/* Immutable Syllabus Approval & Change Audit Log */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between">
+              <div className="text-xs font-bold text-[#101D35] dark:text-white flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-[#1677FF]" />
+                Syllabus Approval &amp; Update Audit Log (
+                {
+                  syllabusApprovalLogs.filter(
+                    (l) => versionCourseFilter === 'ALL' || l.courseId === versionCourseFilter
+                  ).length
+                }
+                )
+              </div>
+              <span className="text-[11px] text-slate-500">
+                Tracks previous → updated versions, approver, timestamp &amp; change description
+              </span>
+            </div>
+            {syllabusApprovalLogs.filter(
+              (l) => versionCourseFilter === 'ALL' || l.courseId === versionCourseFilter
+            ).length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-500">
+                Approval events will appear here automatically as revisions are submitted, approved,
+                published, or restored.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+                      <th className="py-2.5 px-4 font-medium">Update Date</th>
+                      <th className="py-2.5 px-4 font-medium">Course</th>
+                      <th className="py-2.5 px-4 font-medium">Version Transition</th>
+                      <th className="py-2.5 px-4 font-medium">Approval Action</th>
+                      <th className="py-2.5 px-4 font-medium">Updated By</th>
+                      <th className="py-2.5 px-4 font-medium">Change Description</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                    {syllabusApprovalLogs
+                      .filter(
+                        (l) => versionCourseFilter === 'ALL' || l.courseId === versionCourseFilter
+                      )
+                      .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+                      .slice(0, 60)
+                      .map((log) => (
+                        <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                          <td className="py-2.5 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                            {new Date(log.timestamp).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-4 font-semibold text-slate-900 dark:text-white">
+                            {log.courseName}
+                          </td>
+                          <td className="py-2.5 px-4 font-mono text-[11px] text-[#1677FF] whitespace-nowrap">
+                            v{log.previousVersionNumber || 0} → v{log.versionNumber}
+                          </td>
+                          <td className="py-2.5 px-4 whitespace-nowrap">
+                            <span className="inline-flex px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold capitalize">
+                              {log.action.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-4 whitespace-nowrap">
+                            <span className="font-medium text-slate-900 dark:text-white">
+                              {log.performedByName}
+                            </span>{' '}
+                            <span className="text-slate-400">({log.performedByEmail})</span>
+                          </td>
+                          <td className="py-2.5 px-4 text-slate-600 dark:text-slate-300 max-w-sm">
+                            {log.changeDescription}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

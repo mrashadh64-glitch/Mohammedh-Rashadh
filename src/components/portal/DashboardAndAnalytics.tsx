@@ -37,14 +37,18 @@ import {
   Course,
   Enrollment,
   Expense,
+  GeneratedPoster,
   LeadRecord,
   ModuleProgressRecord,
   Payment,
   SpecialProgramme,
+  StudentAccountRecord,
   Submission,
   SyllabusRecord,
+  SyllabusVersionRecord,
   UserProfile,
 } from '../../types/lms';
+import { auth } from '../../lib/firebase';
 import { formatLkr, initialize2027InstituteCatalog } from '../../lib/firestoreService';
 import { BRAND_IMAGES, INSTITUTE_INFO } from '../../data/catalogSeed';
 import { StatusLabel } from '../common/PlatformWidgets';
@@ -65,6 +69,9 @@ interface DashboardProps {
   usersList: UserProfile[];
   leads?: LeadRecord[];
   syllabuses?: SyllabusRecord[];
+  syllabusVersions?: SyllabusVersionRecord[];
+  studentAccounts?: StudentAccountRecord[];
+  generatedPosters?: GeneratedPoster[];
   moduleProgress?: ModuleProgressRecord[];
   specialProgramme?: SpecialProgramme;
   onNavigateTab: (tab: string) => void;
@@ -90,6 +97,9 @@ export const DashboardAndAnalytics: React.FC<DashboardProps> = ({
   usersList,
   leads = [],
   syllabuses = [],
+  syllabusVersions = [],
+  studentAccounts = [],
+  generatedPosters = [],
   moduleProgress = [],
   specialProgramme,
   onNavigateTab,
@@ -98,6 +108,7 @@ export const DashboardAndAnalytics: React.FC<DashboardProps> = ({
 }) => {
   const [seeding, setSeeding] = useState(false);
   const [seedDoneMsg, setSeedDoneMsg] = useState<string | null>(null);
+  const [seedErrMsg, setSeedErrMsg] = useState<string | null>(null);
 
   // Private AI CEO Assistant state
   const [ceoQuestion, setCeoQuestion] = useState('');
@@ -144,8 +155,38 @@ export const DashboardAndAnalytics: React.FC<DashboardProps> = ({
       publishedCourses: courses.filter((c) => c.status === 'published').length,
       totalCourses: courses.length,
       totalBranches: branches.length,
+      totalStudentAccounts: studentAccounts.length,
+      activeStudentAccounts: studentAccounts.filter((a) => a.status === 'Active').length,
+      pendingStudentInvitations: studentAccounts.filter(
+        (a) => a.status === 'Invitation Sent' || a.status === 'Not Created'
+      ).length,
+      passwordResetRequests: studentAccounts.filter(
+        (a) => a.status === 'Password Reset Required'
+      ).length,
+      totalPostersGenerated: generatedPosters.length,
+      postersPendingApproval: generatedPosters.filter(
+        (p) => p.status === 'pending_approval' || p.status === 'needs_update'
+      ).length,
+      publishedPosters: generatedPosters.filter((p) => p.status === 'published').length,
+      totalSyllabuses: syllabuses.length,
+      syllabusUpdatesPending: syllabusVersions.filter((v) => v.status === 'Pending Review').length,
     };
-  }, [payments, expenses, applications, usersList, enrollments, submissions, certificates, attendance, courses, branches]);
+  }, [
+    payments,
+    expenses,
+    applications,
+    usersList,
+    enrollments,
+    submissions,
+    certificates,
+    attendance,
+    courses,
+    branches,
+    studentAccounts,
+    generatedPosters,
+    syllabuses,
+    syllabusVersions,
+  ]);
 
   const domainChartData = useMemo(() => {
     const counts = new Map<string, number>();
@@ -168,10 +209,19 @@ export const DashboardAndAnalytics: React.FC<DashboardProps> = ({
   const handleSeedCatalog = async () => {
     setSeeding(true);
     setSeedDoneMsg(null);
+    setSeedErrMsg(null);
     try {
       await initialize2027InstituteCatalog(profile.uid, userEmail);
       await onRefreshData();
-      setSeedDoneMsg('Successfully initialized all 32 official 2027 courses, 3 branches, 13 RBAC role configs, and starter CMS records in Firestore.');
+      setSeedDoneMsg(
+        'Successfully synced all 40 official 2027 courses (22 Certificate incl. 5 FREE + 18 Diploma), 5 branches, 13 RBAC role configs, brand settings, workflows, and CMS items in Firestore.'
+      );
+    } catch (err) {
+      setSeedErrMsg(
+        err instanceof Error
+          ? err.message
+          : 'Failed to sync the 40-course 2027 catalog. Verify Super Admin permissions.'
+      );
     } finally {
       setSeeding(false);
     }
@@ -185,9 +235,14 @@ export const DashboardAndAnalytics: React.FC<DashboardProps> = ({
     setCeoLoading(true);
     setCeoError(null);
     try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Super Admin authentication is required.');
       const res = await fetch('/api/ai/ceo-assistant', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           question: q,
           reportingPeriod: '2027 Academic Intake (Live Firestore Data)',
@@ -528,10 +583,10 @@ export const DashboardAndAnalytics: React.FC<DashboardProps> = ({
             >
               <BookOpen className="w-4 h-4" />
               {seeding
-                ? 'Initializing 32 Courses...'
-                : courses.length >= 32
-                ? 'Sync Official 32-Course 2027 Catalog'
-                : 'Initialize 32-Course 2027 Catalog'}
+                ? 'Syncing 40 Official 2027 Courses...'
+                : courses.length >= 40
+                ? 'Sync Official 40-Course 2027 Catalog'
+                : 'Initialize / Sync 40 Official 2027 Courses'}
             </button>
           </div>
         )}
@@ -541,6 +596,18 @@ export const DashboardAndAnalytics: React.FC<DashboardProps> = ({
         <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-sm text-emerald-800 dark:text-emerald-300 flex items-center gap-2.5">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>{seedDoneMsg}</span>
+        </div>
+      )}
+
+      {seedErrMsg && (
+        <div className="p-4 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 text-sm text-rose-800 dark:text-rose-300 flex items-center justify-between gap-2.5">
+          <span>{seedErrMsg}</span>
+          <button
+            onClick={() => setSeedErrMsg(null)}
+            className="text-xs underline shrink-0"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -610,6 +677,116 @@ export const DashboardAndAnalytics: React.FC<DashboardProps> = ({
           </div>
         </button>
       </div>
+
+      {/* Platform Governance & Academic Operations KPIs (10 Required Admin Metrics) */}
+      {isExecutiveOrStaff && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-[#0F172A] dark:text-white">
+                Accounts, Posters &amp; Syllabus Governance Overview
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Real-time operational metrics across student credentials, course posters, and syllabus approvals
+              </p>
+            </div>
+            {(isOwner || profile.role === 'ADMIN') && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => onNavigateTab('student-accounts')}
+                  className="px-3 py-1.5 rounded-lg bg-[#1677FF] hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer"
+                >
+                  Manage Student Accounts
+                </button>
+                <button
+                  onClick={() => onNavigateTab('email-logs')}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Email Delivery Logs
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {[
+              {
+                label: 'Total Student Accounts',
+                value: metrics.totalStudentAccounts,
+                tab: 'student-accounts',
+                accent: 'text-[#0F172A] dark:text-white',
+              },
+              {
+                label: 'Active Accounts',
+                value: metrics.activeStudentAccounts,
+                tab: 'student-accounts',
+                accent: 'text-emerald-700 dark:text-emerald-400',
+              },
+              {
+                label: 'Invitations Pending',
+                value: metrics.pendingStudentInvitations,
+                tab: 'student-accounts',
+                accent: 'text-amber-600 dark:text-amber-400',
+              },
+              {
+                label: 'Password Reset Requests',
+                value: metrics.passwordResetRequests,
+                tab: 'student-accounts',
+                accent: 'text-rose-600 dark:text-rose-400',
+              },
+              {
+                label: 'Total Courses',
+                value: metrics.totalCourses,
+                tab: 'courses',
+                accent: 'text-[#1677FF] dark:text-sky-400',
+              },
+              {
+                label: 'Total Posters Generated',
+                value: metrics.totalPostersGenerated,
+                tab: 'poster-library',
+                accent: 'text-[#0F172A] dark:text-white',
+              },
+              {
+                label: 'Posters Pending Approval',
+                value: metrics.postersPendingApproval,
+                tab: 'poster-approval',
+                accent: 'text-amber-600 dark:text-amber-400',
+              },
+              {
+                label: 'Published Posters',
+                value: metrics.publishedPosters,
+                tab: 'poster-library',
+                accent: 'text-emerald-700 dark:text-emerald-400',
+              },
+              {
+                label: 'Total Syllabuses',
+                value: metrics.totalSyllabuses,
+                tab: 'syllabus-list',
+                accent: 'text-[#1677FF] dark:text-sky-400',
+              },
+              {
+                label: 'Syllabus Updates Pending',
+                value: metrics.syllabusUpdatesPending,
+                tab: 'syllabus-list',
+                accent: 'text-amber-600 dark:text-amber-400',
+              },
+            ].map((stat) => (
+              <button
+                key={stat.label}
+                type="button"
+                onClick={() => onNavigateTab(stat.tab)}
+                className="text-left p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 hover:border-[#1677FF] transition cursor-pointer"
+              >
+                <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 leading-snug">
+                  {stat.label}
+                </div>
+                <div className={`mt-1.5 text-xl font-bold font-mono tabular-nums ${stat.accent}`}>
+                  {stat.value}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Secondary Executive Counters */}
       {isExecutiveOrStaff && (

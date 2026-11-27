@@ -4,26 +4,38 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Copy,
   Download,
   Edit3,
+  Eye,
   FileCheck2,
   FileText,
   FolderOpen,
+  Globe,
+  History,
   Layers,
   Lock,
   Paperclip,
   Play,
   Plus,
+  RefreshCw,
   Search,
+  Sparkles,
+  Trash2,
+  Upload,
   Video,
   X,
 } from 'lucide-react';
-import { collection, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import * as XLSX from 'xlsx';
+import { collection, deleteDoc, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { formatLkr, logAuditEvent, makeSafeId } from '../../lib/firestoreService';
+import { formatLkr, logAuditEvent, makeSafeId, syncMissing2027Courses } from '../../lib/firestoreService';
+import { invalidatePublicCatalogCache } from '../../lib/publicCache';
 import { computeModuleProgressMetrics, formatFileSize } from '../../lib/syllabusEngine';
-import { DOMAIN_SYLLABI, INSTITUTE_INFO } from '../../data/catalogSeed';
+import { BRAND_IMAGES, DOMAIN_SYLLABI, INSTITUTE_INFO } from '../../data/catalogSeed';
 import {
+  AuditLog,
+  Branch,
   Course,
   Enrollment,
   Lesson,
@@ -35,12 +47,61 @@ import {
 } from '../../types/lms';
 import { EmptyState, StatusLabel } from '../common/PlatformWidgets';
 
+async function compressCourseImageToDataUrl(file: File, maxWidth: number): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Please upload a valid image file (PNG, JPG, or WebP).');
+  }
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Failed to decode uploaded image.'));
+      el.src = objectUrl;
+    });
+    const ratio = img.width > maxWidth ? maxWidth / img.width : 1;
+    const width = Math.max(1, Math.round(img.width * ratio));
+    const height = Math.max(1, Math.round(img.height * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas image processing unavailable.');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+    let quality = 0.82;
+    let dataUrl = canvas.toDataURL('image/jpeg', quality);
+    while (dataUrl.length > 220000 && quality > 0.35) {
+      quality -= 0.1;
+      dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+    if (dataUrl.length > 235000) {
+      throw new Error('Image is still too large after compression. Please choose a smaller image.');
+    }
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function slugifyCourseName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/–|—/g, '-')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120);
+}
+
 interface AcademicsProps {
   mode: 'courses' | 'lms' | 'library';
   profile: UserProfile;
   userEmail: string;
   isOwner: boolean;
   courses: Course[];
+  branches?: Branch[];
+  auditLogs?: AuditLog[];
   libraryResources: LibraryResource[];
   enrollments?: Enrollment[];
   syllabuses?: SyllabusRecord[];
@@ -56,6 +117,8 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
   userEmail,
   isOwner,
   courses,
+  branches = [],
+  auditLogs = [],
   libraryResources,
   enrollments = [],
   syllabuses = [],
@@ -79,9 +142,16 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
 
   // Course CRUD Modal State
   const [search, setSearch] = useState('');
-  const [catFilter, setCatFilter] = useState<'All' | 'Certificate' | 'Diploma'>('All');
+  const [catFilter, setCatFilter] = useState<'All' | 'Certificate' | 'Diploma' | 'Free'>('All');
+  const [domainFilter, setDomainFilter] = useState<string>('All');
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
+  const [previewingCourse, setPreviewingCourse] = useState<Course | null>(null);
+  const [historyCourse, setHistoryCourse] = useState<Course | null>(null);
+  const [courseToast, setCourseToast] = useState<string | null>(null);
   const [savingCourse, setSavingCourse] = useState(false);
+  const [syncingCatalog, setSyncingCatalog] = useState(false);
+  const [uploadingMediaField, setUploadingMediaField] = useState<'imageUrl' | 'bannerUrl' | null>(null);
 
   // LMS Video / Lesson & Syllabus State
   const [activeCourseId, setActiveCourseId] = useState<string>(
@@ -166,33 +236,82 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
   const handleSaveCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCourse) return;
+    const trimmedName = editingCourse.name.trim();
+    const trimmedCode = editingCourse.code.trim();
+    const computedSlug = (editingCourse.slug?.trim() || slugifyCourseName(trimmedName)).slice(0, 140);
+
+    // Duplicate prevention check (matches by normalized name, code, or slug on other records)
+    const normName = trimmedName.toLowerCase();
+    const normCode = trimmedCode.toLowerCase();
+    const normSlug = computedSlug.toLowerCase();
+    const duplicate = courses.find((c) => {
+      if (editingCourse.id && c.id === editingCourse.id) return false;
+      return (
+        c.name.trim().toLowerCase() === normName ||
+        c.code.trim().toLowerCase() === normCode ||
+        (c.slug && c.slug.trim().toLowerCase() === normSlug)
+      );
+    });
+    if (duplicate) {
+      setCourseToast(
+        `Duplicate prevented: "${duplicate.name}" (${duplicate.code}) already exists in the catalogue.`
+      );
+      return;
+    }
+
     setSavingCourse(true);
     try {
       const id = editingCourse.id || makeSafeId('CRS').toLowerCase();
+      const feeVal = editingCourse.isFree ? 0 : Math.max(0, Number(editingCourse.courseFeeLkr) || 0);
+      const feeConfigured = editingCourse.isFree
+        ? true
+        : editingCourse.feeConfigured !== undefined
+          ? Boolean(editingCourse.feeConfigured)
+          : feeVal > 0;
+      const cleanOutcomes = (editingCourse.learningOutcomes || [])
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 20);
+      const cleanTopics = (editingCourse.syllabusTopics || [])
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 30);
+      const cleanBranchIds = (editingCourse.branchIds || []).filter(Boolean).slice(0, 20);
+
       await setDoc(
         doc(db, 'courses', id),
         {
-          code: editingCourse.code.trim().slice(0, 32),
-          name: editingCourse.name.trim().slice(0, 160),
+          code: trimmedCode.slice(0, 32),
+          slug: computedSlug,
+          name: trimmedName.slice(0, 160),
           category: editingCourse.category,
-          domain: (editingCourse.domain || 'General').slice(0, 64),
+          domain: (editingCourse.domain || 'IT & Technology').slice(0, 64),
           description: (editingCourse.description || '').slice(0, 1200),
-          imageUrl: (editingCourse.imageUrl || '').slice(0, 500),
-          level: (editingCourse.level || '').slice(0, 40),
-          duration: editingCourse.duration.trim().slice(0, 64),
+          imageUrl: (editingCourse.imageUrl || '').slice(0, 240000),
+          bannerUrl: (editingCourse.bannerUrl || '').slice(0, 240000),
+          level: (editingCourse.level || editingCourse.category).slice(0, 40),
+          duration: (editingCourse.duration.trim() || 'Pending Admin Setup').slice(0, 64),
           mode: editingCourse.mode,
-          courseFeeLkr: Math.max(0, Number(editingCourse.courseFeeLkr) || 0),
+          isFree: Boolean(editingCourse.isFree),
+          feeConfigured,
+          currency: (editingCourse.currency || 'LKR').slice(0, 12),
+          featured: Boolean(editingCourse.featured),
+          courseFeeLkr: feeVal,
           registrationFeeLkr: Math.max(0, Number(editingCourse.registrationFeeLkr) || 0),
           certificateFeeLkr: Math.max(0, Number(editingCourse.certificateFeeLkr) || 0),
-          installmentPlan: (editingCourse.installmentPlan || '').slice(0, 120),
-          lecturerName: (editingCourse.lecturerName || 'TECHMAN COLLEGE Senior Faculty').slice(0, 120),
-          batchName: (editingCourse.batchName || '2027 Intake — Batch 01').slice(0, 80),
-          startDate: (editingCourse.startDate || '2027-01-18').slice(0, 32),
-          endDate: (editingCourse.endDate || '2027-08-30').slice(0, 32),
+          installmentPlan: (editingCourse.installmentPlan || (editingCourse.isFree ? 'FREE Programme' : 'Pending Admin Setup')).slice(0, 120),
+          courseLanguage: (editingCourse.courseLanguage || 'Pending Admin Setup').slice(0, 64),
+          branchIds: cleanBranchIds,
+          admissionStatus: editingCourse.admissionStatus || 'open',
+          academicYear: (editingCourse.academicYear || '2027').slice(0, 16),
+          lecturerName: (editingCourse.lecturerName || 'Pending Admin Setup').slice(0, 120),
+          batchName: (editingCourse.batchName || 'Pending Admin Setup').slice(0, 80),
+          startDate: (editingCourse.startDate || 'Pending Admin Setup').slice(0, 32),
+          endDate: (editingCourse.endDate || 'Pending Admin Setup').slice(0, 32),
           maxStudents: Math.max(1, Number(editingCourse.maxStudents) || 45),
-          entryRequirements: (editingCourse.entryRequirements || '').slice(0, 400),
-          learningOutcomes: (editingCourse.learningOutcomes || []).slice(0, 20),
-          syllabusTopics: (editingCourse.syllabusTopics || []).slice(0, 30),
+          entryRequirements: (editingCourse.entryRequirements || 'Pending Admin Setup').slice(0, 400),
+          learningOutcomes: cleanOutcomes,
+          syllabusTopics: cleanTopics,
           certificateEligible: editingCourse.certificateEligible !== false,
           status: editingCourse.status,
           institutionId: INSTITUTE_INFO.institutionId,
@@ -204,13 +323,267 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
         actorUid: profile.uid,
         actorEmail: userEmail,
         actorRole: profile.role,
-        action: 'UPSERT_COURSE',
+        action: editingCourse.id ? 'UPDATE_COURSE' : 'CREATE_COURSE',
         targetType: 'courses',
         targetId: id,
-        details: `Updated course ${editingCourse.name} (Fee: LKR ${editingCourse.courseFeeLkr})`,
+        details: `Saved ${trimmedName} (${trimmedCode}) · Status: ${editingCourse.status} · Admissions: ${editingCourse.admissionStatus || 'open'} · Fee: ${editingCourse.isFree ? 'FREE' : feeConfigured ? `LKR ${feeVal}` : 'Pending Admin Setup'}`,
       });
+      invalidatePublicCatalogCache();
       setEditingCourse(null);
+      setCourseToast(`Saved course "${trimmedName}". Public catalogue cache refreshed.`);
       await onRefreshData();
+    } finally {
+      setSavingCourse(false);
+    }
+  };
+
+  const handleToggleCoursePublish = async (course: Course) => {
+    if (!canManageCourses) return;
+    setSavingCourse(true);
+    try {
+      const nextStatus: Course['status'] = course.status === 'published' ? 'draft' : 'published';
+      await updateDoc(doc(db, 'courses', course.id), {
+        status: nextStatus,
+        updatedAt: new Date().toISOString(),
+      });
+      await logAuditEvent({
+        actorUid: profile.uid,
+        actorEmail: userEmail,
+        actorRole: profile.role,
+        action: nextStatus === 'published' ? 'PUBLISH_COURSE' : 'UNPUBLISH_COURSE',
+        targetType: 'courses',
+        targetId: course.id,
+        details: `${nextStatus === 'published' ? 'Published' : 'Unpublished (draft)'} course ${course.code} — ${course.name}`,
+      });
+      invalidatePublicCatalogCache();
+      setCourseToast(
+        nextStatus === 'published'
+          ? `Published "${course.name}" to the public website.`
+          : `Unpublished "${course.name}" (hidden from public visitors).`
+      );
+      await onRefreshData();
+    } finally {
+      setSavingCourse(false);
+    }
+  };
+
+  const handleToggleAdmissions = async (course: Course) => {
+    if (!canManageCourses) return;
+    setSavingCourse(true);
+    try {
+      const nextAdmission: NonNullable<Course['admissionStatus']> =
+        course.admissionStatus === 'closed' ? 'open' : 'closed';
+      await updateDoc(doc(db, 'courses', course.id), {
+        admissionStatus: nextAdmission,
+        updatedAt: new Date().toISOString(),
+      });
+      await logAuditEvent({
+        actorUid: profile.uid,
+        actorEmail: userEmail,
+        actorRole: profile.role,
+        action: 'TOGGLE_COURSE_ADMISSIONS',
+        targetType: 'courses',
+        targetId: course.id,
+        details: `Set admissions to ${nextAdmission.toUpperCase()} for ${course.code} — ${course.name}`,
+      });
+      invalidatePublicCatalogCache();
+      setCourseToast(
+        `Admissions ${nextAdmission === 'open' ? 'activated' : 'closed'} for "${course.name}".`
+      );
+      await onRefreshData();
+    } finally {
+      setSavingCourse(false);
+    }
+  };
+
+  const handleSync40Courses = async () => {
+    if (!canManageCourses) return;
+    setSyncingCatalog(true);
+    try {
+      const result = await syncMissing2027Courses(profile.uid, userEmail);
+      invalidatePublicCatalogCache();
+      setCourseToast(
+        result.addedCount > 0
+          ? `2027 Catalogue Sync Complete: Added ${result.addedCount} missing unique course(s); preserved ${result.skippedCount} existing record(s).`
+          : `All 40 official 2027 courses are already synced (${result.skippedCount} verified, 0 duplicates added).`
+      );
+      await onRefreshData();
+    } catch (err) {
+      setCourseToast(
+        err instanceof Error ? `Sync error: ${err.message}` : 'Failed to sync 2027 course catalogue.'
+      );
+    } finally {
+      setSyncingCatalog(false);
+    }
+  };
+
+  const handleUploadCourseMedia = async (field: 'imageUrl' | 'bannerUrl', file: File) => {
+    if (!editingCourse) return;
+    setUploadingMediaField(field);
+    try {
+      const maxWidth = field === 'bannerUrl' ? 1200 : 800;
+      const dataUrl = await compressCourseImageToDataUrl(file, maxWidth);
+      setEditingCourse({ ...editingCourse, [field]: dataUrl });
+      setCourseToast(
+        `${field === 'bannerUrl' ? 'Banner' : 'Thumbnail'} image uploaded and optimized (${Math.round(dataUrl.length / 1024)} KB). Click Save Course to apply.`
+      );
+    } catch (err) {
+      setCourseToast(err instanceof Error ? err.message : 'Image upload failed.');
+    } finally {
+      setUploadingMediaField(null);
+    }
+  };
+
+  const handleDuplicateCourseAsDraft = async (source: Course) => {
+    if (!canManageCourses) return;
+    setSavingCourse(true);
+    try {
+      const newId = makeSafeId('CRS').toLowerCase();
+      const copyCode = `${source.code}-COPY`.slice(0, 32);
+      const copyName = `${source.name} (Draft Copy)`.slice(0, 160);
+      const { id: _omitId, ...restSource } = source;
+      void _omitId;
+      await setDoc(doc(db, 'courses', newId), {
+        ...restSource,
+        code: copyCode,
+        slug: slugifyCourseName(`${source.slug || source.name}-copy-${newId.slice(-4)}`),
+        name: copyName,
+        status: 'draft',
+        institutionId: INSTITUTE_INFO.institutionId,
+        updatedAt: new Date().toISOString(),
+      });
+      await logAuditEvent({
+        actorUid: profile.uid,
+        actorEmail: userEmail,
+        actorRole: profile.role,
+        action: 'DUPLICATE_COURSE',
+        targetType: 'courses',
+        targetId: newId,
+        details: `Duplicated ${source.code} as draft ${copyCode}`,
+      });
+      invalidatePublicCatalogCache();
+      setCourseToast(`Duplicated "${source.name}" as a draft.`);
+      await onRefreshData();
+    } finally {
+      setSavingCourse(false);
+    }
+  };
+
+  const handleDeleteCourseConfirmed = async () => {
+    if (!deletingCourse || !isOwner) return;
+    setSavingCourse(true);
+    try {
+      await deleteDoc(doc(db, 'courses', deletingCourse.id));
+      await logAuditEvent({
+        actorUid: profile.uid,
+        actorEmail: userEmail,
+        actorRole: profile.role,
+        action: 'DELETE_COURSE',
+        targetType: 'courses',
+        targetId: deletingCourse.id,
+        details: `Deleted course ${deletingCourse.code} — ${deletingCourse.name}`,
+      });
+      invalidatePublicCatalogCache();
+      setCourseToast(`Deleted course "${deletingCourse.name}".`);
+      setDeletingCourse(null);
+      await onRefreshData();
+    } finally {
+      setSavingCourse(false);
+    }
+  };
+
+  const handleExportCourses = (format: 'json' | 'xlsx') => {
+    if (format === 'json') {
+      const blob = new Blob([JSON.stringify(courses, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `TECHMAN_2027_Courses_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+    const rows = courses.map((c) => ({
+      Code: c.code,
+      Name: c.name,
+      Category: c.category,
+      Domain: c.domain,
+      Duration: c.duration,
+      Mode: c.mode,
+      Free: c.isFree ? 'YES' : 'NO',
+      FeeConfigured: c.feeConfigured === false ? 'NO' : 'YES',
+      CourseFeeLKR: c.courseFeeLkr,
+      RegistrationFeeLKR: c.registrationFeeLkr,
+      CertificateFeeLKR: c.certificateFeeLkr,
+      Status: c.status,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '2027_Courses');
+    XLSX.writeFile(wb, `TECHMAN_2027_Courses_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const handleImportCoursesFile = async (file: File) => {
+    if (!canManageCourses) return;
+    setSavingCourse(true);
+    try {
+      let incoming: Array<Record<string, unknown>> = [];
+      if (file.name.toLowerCase().endsWith('.json')) {
+        const parsed = JSON.parse(await file.text());
+        incoming = Array.isArray(parsed) ? parsed : [];
+      } else {
+        const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        incoming = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+      }
+      const existingByCode = new Map(courses.map((c) => [c.code.toLowerCase(), c]));
+      const existingByName = new Map(courses.map((c) => [c.name.toLowerCase(), c]));
+      let created = 0;
+      let skipped = 0;
+      for (const raw of incoming) {
+        const name = String(raw.name || raw.Name || '').trim();
+        const code = String(raw.code || raw.Code || makeSafeId('TM').slice(0, 10)).trim();
+        if (!name || existingByCode.has(code.toLowerCase()) || existingByName.has(name.toLowerCase())) {
+          skipped += 1;
+          continue;
+        }
+        const category = String(raw.category || raw.Category || 'Certificate').toLowerCase().includes('diploma')
+          ? 'Diploma'
+          : 'Certificate';
+        const isFreeVal = Boolean(raw.isFree) || String(raw.Free || '').toUpperCase() === 'YES';
+        const feeVal = isFreeVal ? 0 : Math.max(0, Number(raw.courseFeeLkr ?? raw.CourseFeeLKR ?? 0) || 0);
+        const docId = makeSafeId('CRS').toLowerCase();
+        await setDoc(doc(db, 'courses', docId), {
+          code: code.slice(0, 32),
+          slug: slugifyCourseName(name),
+          name: name.slice(0, 160),
+          category,
+          domain: String(raw.domain || raw.Domain || 'IT & Technology').slice(0, 64),
+          description: String(raw.description || raw.Description || `${name} programme at TECHMAN COLLEGE ONLINE.`).slice(0, 1200),
+          duration: String(raw.duration || raw.Duration || 'Pending Admin Setup').slice(0, 64),
+          mode: ['Online', 'Physical', 'Hybrid'].includes(String(raw.mode || raw.Mode))
+            ? String(raw.mode || raw.Mode)
+            : 'Hybrid',
+          isFree: isFreeVal,
+          feeConfigured: isFreeVal || feeVal > 0,
+          courseFeeLkr: feeVal,
+          registrationFeeLkr: Math.max(0, Number(raw.registrationFeeLkr ?? raw.RegistrationFeeLKR ?? 0) || 0),
+          certificateFeeLkr: Math.max(0, Number(raw.certificateFeeLkr ?? raw.CertificateFeeLKR ?? 0) || 0),
+          courseLanguage: 'Pending Admin Setup',
+          entryRequirements: 'Pending Admin Setup',
+          admissionStatus: 'open',
+          academicYear: '2027',
+          status: 'draft',
+          institutionId: INSTITUTE_INFO.institutionId,
+          updatedAt: new Date().toISOString(),
+        });
+        created += 1;
+      }
+      invalidatePublicCatalogCache();
+      setCourseToast(`Course import complete: ${created} added as drafts, ${skipped} duplicates skipped.`);
+      await onRefreshData();
+    } catch (err) {
+      setCourseToast(err instanceof Error ? `Import error: ${err.message}` : 'Course import failed.');
     } finally {
       setSavingCourse(false);
     }
@@ -382,10 +755,14 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
     }
   };
 
-  // MODE 1: COURSE MANAGEMENT (EDITABLE 32-COURSE CATALOG)
+  // MODE 1: COURSE MANAGEMENT (EDITABLE 40-COURSE 2027 CATALOG)
   if (mode === 'courses') {
+    const distinctDomains = Array.from(new Set(courses.map((c) => c.domain).filter(Boolean))).sort();
     const filtered = courses.filter((c) => {
-      if (catFilter !== 'All' && c.category !== catFilter) return false;
+      if (catFilter === 'Certificate' && c.category !== 'Certificate') return false;
+      if (catFilter === 'Diploma' && c.category !== 'Diploma') return false;
+      if (catFilter === 'Free' && !c.isFree) return false;
+      if (domainFilter !== 'All' && c.domain !== domainFilter) return false;
       const q = search.trim().toLowerCase();
       if (!q) return true;
       return (
@@ -400,48 +777,100 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-[#0F172A] dark:text-white">
-              Course &amp; Syllabus Management
+              2027 Course Catalogue &amp; Management ({courses.length})
             </h1>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              Edit LKR course fees, durations, modes, batches, and module syllabi live without code changes.
+              Manage all Certificate, Diploma, and Free programmes, configure LKR fees &amp; durations, and export or import courses.
             </p>
           </div>
           {canManageCourses && (
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={syncingCatalog}
+                onClick={() => void handleSync40Courses()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1677FF]/40 bg-[#EAF1FC] dark:bg-blue-950/40 text-[#101D35] dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-950/70 text-xs font-semibold cursor-pointer disabled:opacity-60"
+                title="Safely insert any missing unique records from the 40-course 2027 catalogue without overwriting existing courses"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-[#1677FF] ${syncingCatalog ? 'animate-spin' : ''}`} />
+                {syncingCatalog ? 'Syncing 40 Courses...' : 'Sync 40-Course 2027 Catalogue'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportCourses('xlsx')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportCourses('json')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                JSON
+              </button>
+              <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium cursor-pointer">
+                <Upload className="w-3.5 h-3.5 text-[#1677FF]" />
+                Import
+                <input
+                  type="file"
+                  accept=".json,.xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleImportCoursesFile(f);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
               {onNavigateTab && (
                 <button
                   onClick={() => onNavigateTab('syllabus-list')}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition cursor-pointer whitespace-nowrap"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition cursor-pointer whitespace-nowrap"
                 >
-                  <Layers className="w-4 h-4 text-[#1677FF]" />
-                  Manage Syllabuses
+                  <Layers className="w-3.5 h-3.5 text-[#1677FF]" />
+                  Syllabuses
                 </button>
               )}
               <button
                 onClick={() =>
                   setEditingCourse({
                     id: '',
-                    code: 'TM-NEW-27',
+                    code: `TM-27-${String(courses.length + 1).padStart(2, '0')}`,
+                    slug: '',
                     name: '',
-                    category: 'Diploma',
-                    domain: 'Artificial Intelligence',
+                    category: 'Certificate',
+                    domain: 'IT & Technology',
                     description: '',
-                    duration: '6 Months',
+                    duration: 'Pending Admin Setup',
                     mode: 'Hybrid',
-                    courseFeeLkr: 55000,
-                    registrationFeeLkr: 5000,
-                    certificateFeeLkr: 4000,
-                    installmentPlan: '3 Monthly Installments',
-                    lecturerName: 'TECHMAN COLLEGE Senior Faculty',
-                    batchName: '2027 Intake — Batch 01',
+                    isFree: false,
+                    feeConfigured: false,
+                    featured: false,
+                    courseFeeLkr: 0,
+                    registrationFeeLkr: 0,
+                    certificateFeeLkr: 0,
+                    installmentPlan: 'Pending Admin Setup',
+                    courseLanguage: 'Pending Admin Setup',
+                    branchIds: branches.map((b) => b.id),
+                    admissionStatus: 'open',
+                    academicYear: '2027',
+                    lecturerName: 'Pending Admin Setup',
+                    batchName: 'Pending Admin Setup',
+                    startDate: 'Pending Admin Setup',
+                    endDate: 'Pending Admin Setup',
+                    entryRequirements: 'Pending Admin Setup',
+                    learningOutcomes: [],
                     maxStudents: 45,
-                    syllabusTopics: DOMAIN_SYLLABI['Artificial Intelligence'],
+                    syllabusTopics: DOMAIN_SYLLABI['IT & Technology'] || [],
                     certificateEligible: true,
-                    status: 'published',
+                    status: 'draft',
                     institutionId: INSTITUTE_INFO.institutionId,
                   })
                 }
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-700 hover:bg-violet-800 text-white text-sm font-medium transition cursor-pointer whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1677FF] hover:bg-blue-700 text-white text-xs font-semibold transition cursor-pointer whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" />
                 New Course
@@ -450,19 +879,42 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search courses by name, code, or domain..."
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
-            />
+        {courseToast && (
+          <div className="p-3 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-xs text-blue-800 dark:text-blue-200 flex items-center justify-between gap-3">
+            <span>{courseToast}</span>
+            <button onClick={() => setCourseToast(null)} className="cursor-pointer">
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <div className="inline-flex p-1 rounded-lg bg-slate-200/70 dark:bg-slate-800">
-            {(['All', 'Certificate', 'Diploma'] as const).map((cat) => (
+        )}
+
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-2 flex-1">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search courses by name, code, or subject category..."
+                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+              />
+            </div>
+            <select
+              value={domainFilter}
+              onChange={(e) => setDomainFilter(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium"
+            >
+              <option value="All">All Subject Categories</option>
+              {distinctDomains.map((dom) => (
+                <option key={dom} value={dom}>
+                  {dom}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="inline-flex p-1 rounded-lg bg-slate-200/70 dark:bg-slate-800 self-start">
+            {(['All', 'Certificate', 'Diploma', 'Free'] as const).map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCatFilter(cat)}
@@ -472,7 +924,7 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
                     : 'text-slate-600 dark:text-slate-400'
                 }`}
               >
-                {cat}
+                {cat === 'Free' ? `Free (${courses.filter((c) => c.isFree).length})` : cat}
               </button>
             ))}
           </div>
@@ -489,7 +941,7 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
                   <th className="py-3 px-4 font-medium">Duration</th>
                   <th className="py-3 px-4 font-medium text-right">Course Fee (LKR)</th>
                   <th className="py-3 px-4 font-medium">Status</th>
-                  {canManageCourses && <th className="py-3 px-4 font-medium text-right">Action</th>}
+                  {canManageCourses && <th className="py-3 px-4 font-medium text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -499,7 +951,14 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
                       {course.code}
                     </td>
                     <td className="py-3 px-4">
-                      <div className="font-medium text-slate-900 dark:text-white">{course.name}</div>
+                      <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>{course.name}</span>
+                        {course.isFree && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-[10px] font-bold">
+                            FREE
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500 dark:text-slate-400">
                         {course.domain} · {(course.syllabusTopics || []).length} syllabus modules
                       </div>
@@ -510,21 +969,103 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
                     <td className="py-3 px-4 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
                       {course.duration}
                     </td>
-                    <td className="py-3 px-4 font-mono tabular-nums text-right font-semibold text-slate-900 dark:text-white whitespace-nowrap">
-                      {formatLkr(course.courseFeeLkr)}
+                    <td className="py-3 px-4 font-mono tabular-nums text-right font-semibold whitespace-nowrap">
+                      {course.isFree ? (
+                        <span className="text-emerald-700 dark:text-emerald-400">FREE</span>
+                      ) : course.feeConfigured === false ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 text-[11px] font-sans font-semibold">
+                          Pending Admin Setup
+                        </span>
+                      ) : (
+                        <span className="text-slate-900 dark:text-white">{formatLkr(course.courseFeeLkr)}</span>
+                      )}
                     </td>
                     <td className="py-3 px-4">
-                      <StatusLabel status={course.status} />
+                      <div className="flex flex-col items-start gap-1">
+                        <StatusLabel status={course.status} />
+                        {canManageCourses && (
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <button
+                              type="button"
+                              disabled={savingCourse}
+                              onClick={() => void handleToggleCoursePublish(course)}
+                              className="underline text-[#1677FF] hover:text-blue-700 font-medium cursor-pointer"
+                            >
+                              {course.status === 'published' ? 'Unpublish' : 'Publish'}
+                            </button>
+                            <span className="text-slate-300 dark:text-slate-700">·</span>
+                            <button
+                              type="button"
+                              disabled={savingCourse}
+                              onClick={() => void handleToggleAdmissions(course)}
+                              className={`font-medium cursor-pointer ${
+                                course.admissionStatus === 'closed'
+                                  ? 'text-red-600 dark:text-red-400'
+                                  : 'text-emerald-700 dark:text-emerald-400'
+                              }`}
+                            >
+                              {course.admissionStatus === 'closed' ? 'Admissions Closed' : 'Admissions Active'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     {canManageCourses && (
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => setEditingCourse(course)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                          Edit
-                        </button>
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewingCourse(course)}
+                            title="Preview Public Course Page"
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setHistoryCourse(course)}
+                            title="View Course Change & Version History"
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                          </button>
+                          {onNavigateTab && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateTab('poster-generator')}
+                              title="Open AI Poster Generator"
+                              className="p-1.5 rounded-lg border border-blue-200 dark:border-blue-900 text-[#1677FF] hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setEditingCourse(course)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            disabled={savingCourse}
+                            onClick={() => void handleDuplicateCourseAsDraft(course)}
+                            title="Duplicate as Draft"
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                          {isOwner && (
+                            <button
+                              type="button"
+                              onClick={() => setDeletingCourse(course)}
+                              title="Delete Course (Super Admin)"
+                              className="p-1.5 rounded-lg border border-red-200 dark:border-red-900 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -533,6 +1074,37 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
             </table>
           </div>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {deletingCourse && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+            <div className="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Delete Course "{deletingCourse.name}"?
+              </h2>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                This permanently removes course record <span className="font-mono font-semibold">{deletingCourse.code}</span> from the catalogue. Existing student applications and issued certificates remain intact.
+              </p>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeletingCourse(null)}
+                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingCourse}
+                  onClick={() => void handleDeleteCourseConfirmed()}
+                  className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold cursor-pointer"
+                >
+                  {savingCourse ? 'Deleting...' : 'Confirm Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Edit / Create Course Modal */}
         {editingCourse && (
@@ -636,11 +1208,17 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
                   <input
                     type="number"
                     min={0}
-                    value={editingCourse.courseFeeLkr}
-                    onChange={(e) =>
-                      setEditingCourse({ ...editingCourse, courseFeeLkr: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-mono"
+                    disabled={Boolean(editingCourse.isFree)}
+                    value={editingCourse.isFree ? 0 : editingCourse.courseFeeLkr}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setEditingCourse({
+                        ...editingCourse,
+                        courseFeeLkr: val,
+                        feeConfigured: val > 0 ? true : editingCourse.feeConfigured,
+                      });
+                    }}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-mono disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -687,6 +1265,183 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs">
+                <label className="inline-flex items-center gap-2 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(editingCourse.isFree)}
+                    onChange={(e) =>
+                      setEditingCourse({
+                        ...editingCourse,
+                        isFree: e.target.checked,
+                        courseFeeLkr: e.target.checked ? 0 : editingCourse.courseFeeLkr,
+                        feeConfigured: e.target.checked ? true : editingCourse.feeConfigured,
+                      })
+                    }
+                  />
+                  Official FREE Programme
+                </label>
+                <label className="inline-flex items-center gap-2 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    disabled={Boolean(editingCourse.isFree)}
+                    checked={editingCourse.isFree ? true : editingCourse.feeConfigured !== false}
+                    onChange={(e) =>
+                      setEditingCourse({
+                        ...editingCourse,
+                        feeConfigured: e.target.checked,
+                      })
+                    }
+                  />
+                  Fee Officially Configured
+                </label>
+                <label className="inline-flex items-center gap-2 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(editingCourse.featured)}
+                    onChange={(e) =>
+                      setEditingCourse({ ...editingCourse, featured: e.target.checked })
+                    }
+                  />
+                  Featured on Portal
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1">URL Slug</label>
+                  <input
+                    type="text"
+                    value={editingCourse.slug || ''}
+                    onChange={(e) => setEditingCourse({ ...editingCourse, slug: e.target.value })}
+                    placeholder={slugifyCourseName(editingCourse.name || 'course-slug')}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Medium / Language</label>
+                  <input
+                    type="text"
+                    value={editingCourse.courseLanguage || ''}
+                    onChange={(e) => setEditingCourse({ ...editingCourse, courseLanguage: e.target.value })}
+                    placeholder="Pending Admin Setup"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Admission Status</label>
+                  <select
+                    value={editingCourse.admissionStatus || 'open'}
+                    onChange={(e) =>
+                      setEditingCourse({
+                        ...editingCourse,
+                        admissionStatus: e.target.value as NonNullable<Course['admissionStatus']>,
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  >
+                    <option value="open">Admissions Open</option>
+                    <option value="closing_soon">Closing Soon</option>
+                    <option value="upcoming">Upcoming Intake</option>
+                    <option value="closed">Admissions Closed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Academic Year</label>
+                  <input
+                    type="text"
+                    value={editingCourse.academicYear || '2027'}
+                    onChange={(e) => setEditingCourse({ ...editingCourse, academicYear: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium">Course Thumbnail / Poster</label>
+                    <label className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1677FF] hover:underline cursor-pointer">
+                      <Upload className="w-3 h-3" />
+                      {uploadingMediaField === 'imageUrl' ? 'Optimizing...' : 'Upload Image'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void handleUploadCourseMedia('imageUrl', f);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <input
+                    type="text"
+                    value={editingCourse.imageUrl || ''}
+                    onChange={(e) =>
+                      setEditingCourse({ ...editingCourse, imageUrl: e.target.value })
+                    }
+                    placeholder="/assets/... or upload image"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium">Course Banner Image</label>
+                    <label className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1677FF] hover:underline cursor-pointer">
+                      <Upload className="w-3 h-3" />
+                      {uploadingMediaField === 'bannerUrl' ? 'Optimizing...' : 'Upload Banner'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void handleUploadCourseMedia('bannerUrl', f);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <input
+                    type="text"
+                    value={editingCourse.bannerUrl || ''}
+                    onChange={(e) =>
+                      setEditingCourse({ ...editingCourse, bannerUrl: e.target.value })
+                    }
+                    placeholder="/assets/... or upload banner"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+              </div>
+
+              {branches.length > 0 && (
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                  <div className="text-xs font-medium mb-2">Available Campus Branches</div>
+                  <div className="flex flex-wrap gap-3">
+                    {branches.map((br) => {
+                      const checked = (editingCourse.branchIds || []).includes(br.id);
+                      return (
+                        <label key={br.id} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const current = new Set(editingCourse.branchIds || []);
+                              if (e.target.checked) current.add(br.id);
+                              else current.delete(br.id);
+                              setEditingCourse({ ...editingCourse, branchIds: Array.from(current) });
+                            }}
+                          />
+                          <span>{br.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-medium mb-1">Course Description</label>
                 <textarea
@@ -697,6 +1452,36 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
                   }
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1">Entry Requirements</label>
+                  <textarea
+                    rows={3}
+                    value={editingCourse.entryRequirements || ''}
+                    onChange={(e) =>
+                      setEditingCourse({ ...editingCourse, entryRequirements: e.target.value })
+                    }
+                    placeholder="Pending Admin Setup"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Learning Outcomes (one per line)</label>
+                  <textarea
+                    rows={3}
+                    value={(editingCourse.learningOutcomes || []).join('\n')}
+                    onChange={(e) =>
+                      setEditingCourse({
+                        ...editingCourse,
+                        learningOutcomes: e.target.value.split('\n'),
+                      })
+                    }
+                    placeholder="Enter each verified learning outcome on a new line"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
               </div>
 
               <div>
@@ -750,12 +1535,198 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
                 <button
                   type="submit"
                   disabled={savingCourse}
-                  className="px-5 py-2 rounded-lg bg-violet-700 hover:bg-violet-800 text-white text-sm font-medium cursor-pointer"
+                  className="px-5 py-2 rounded-lg bg-[#1677FF] hover:bg-blue-700 text-white text-sm font-semibold cursor-pointer"
                 >
                   {savingCourse ? 'Saving...' : 'Save Course'}
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* Public Course Page Preview Modal */}
+        {previewingCourse && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 overflow-y-auto">
+            <div className="w-full max-w-2xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden my-8">
+              <div className="bg-[#101D35] text-white p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-300 mb-1">
+                      Public Website Preview · https://techmancollege.online/courses/{previewingCourse.slug || previewingCourse.id}
+                    </div>
+                    <h2 className="text-xl font-bold">{previewingCourse.name}</h2>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-blue-100">
+                      <span>{previewingCourse.category}</span>
+                      <span>·</span>
+                      <span>{previewingCourse.domain || 'General'}</span>
+                      <span>·</span>
+                      <span>{previewingCourse.mode}</span>
+                      <span>·</span>
+                      <span>{previewingCourse.duration || 'Pending Admin Setup'}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewingCourse(null)}
+                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-lg bg-[#EAF1FC] dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-xs">
+                  <div>
+                    <span className="text-slate-600 dark:text-slate-400">Public Visibility: </span>
+                    <strong className={previewingCourse.status === 'published' ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-300'}>
+                      {previewingCourse.status === 'published' ? 'Published (Visible Publicly)' : `${previewingCourse.status.toUpperCase()} (Hidden from Public)`}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-600 dark:text-slate-400">Tuition Fee: </span>
+                    <strong className="text-[#101D35] dark:text-white">
+                      {previewingCourse.isFree
+                        ? 'FREE (100% Free Tuition)'
+                        : previewingCourse.feeConfigured === false
+                          ? 'Pending Admin Setup'
+                          : formatLkr(previewingCourse.courseFeeLkr)}
+                    </strong>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Course Overview</h3>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                    {previewingCourse.description || 'Pending Admin Setup'}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="text-slate-500">Medium</div>
+                    <div className="font-semibold mt-0.5">{previewingCourse.courseLanguage || 'Pending Admin Setup'}</div>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="text-slate-500">Admissions</div>
+                    <div className="font-semibold mt-0.5 uppercase">{previewingCourse.admissionStatus || 'open'}</div>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="text-slate-500">Academic Year</div>
+                    <div className="font-semibold mt-0.5">{previewingCourse.academicYear || '2027'}</div>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Entry Requirements</h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    {previewingCourse.entryRequirements || 'Pending Admin Setup'}
+                  </p>
+                </div>
+                {(previewingCourse.learningOutcomes || []).length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Learning Outcomes</h3>
+                    <ul className="list-disc pl-5 text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                      {(previewingCourse.learningOutcomes || []).map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(previewingCourse.syllabusTopics || []).length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Syllabus Outline ({(previewingCourse.syllabusTopics || []).length} topics)
+                    </h3>
+                    <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
+                      {(previewingCourse.syllabusTopics || []).slice(0, 8).map((t, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="font-mono text-[#1677FF]">{String(i + 1).padStart(2, '0')}</span>
+                          <span>{t}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/50">
+                <a
+                  href={`/courses/${previewingCourse.slug || previewingCourse.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#1677FF] text-white text-xs font-semibold hover:bg-blue-700"
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  Open Live Route
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewingCourse(null)}
+                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium cursor-pointer"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Course Change & Version History Modal */}
+        {historyCourse && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 overflow-y-auto">
+            <div className="w-full max-w-xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 space-y-4 my-8">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                <div>
+                  <h2 className="text-base font-bold text-[#101D35] dark:text-white">
+                    Course Change &amp; Version History
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {historyCourse.code} — {historyCourse.name}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setHistoryCourse(null)}
+                  className="p-1 text-slate-500 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="max-h-80 overflow-y-auto space-y-2.5">
+                {auditLogs.filter(
+                  (log) => log.targetType === 'courses' && log.targetId === historyCourse.id
+                ).length === 0 ? (
+                  <div className="p-4 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-500 text-center">
+                    No edit history logged for this course yet. Any future fee, syllabus, publish, or admission updates will be recorded automatically with timestamp and admin actor.
+                  </div>
+                ) : (
+                  auditLogs
+                    .filter((log) => log.targetType === 'courses' && log.targetId === historyCourse.id)
+                    .map((log) => (
+                      <div
+                        key={log.id}
+                        className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-xs"
+                      >
+                        <div className="flex items-center justify-between gap-2 font-semibold text-slate-900 dark:text-white">
+                          <span>{log.action}</span>
+                          <span className="font-mono text-[11px] text-slate-500">
+                            {log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 dark:text-slate-300 mt-1">{log.details}</p>
+                        <div className="text-[11px] text-slate-500 mt-1">
+                          By {log.actorEmail} ({log.actorRole})
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setHistoryCourse(null)}
+                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -1594,6 +2565,33 @@ export const AcademicsAndLMS: React.FC<AcademicsProps> = ({
           placeholder="Search library by title, category, or format..."
           className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
         />
+      </div>
+
+      {/* Featured Official College Lecture Deck */}
+      <div className="p-5 rounded-xl border border-[#1677FF]/30 bg-gradient-to-r from-[#EAF1FC]/80 via-white to-white dark:from-blue-950/30 dark:via-slate-900 dark:to-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#1677FF] dark:text-sky-400">
+            <FileText className="w-3.5 h-3.5" />
+            Official TECHMAN AI Institute &amp; Academy Study Deck · PDF
+          </div>
+          <h2 className="text-base font-bold text-[#101D35] dark:text-white">
+            AI First Class — No Hype. Only Reality.
+          </h2>
+          <p className="text-xs text-slate-600 dark:text-slate-300 max-w-2xl">
+            Official foundational lecture deck covering real-world Artificial Intelligence workflows, prompt discipline, and practical productivity for 2027 Certificate &amp; Diploma students.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href={BRAND_IMAGES.aiFirstClassPdf}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1677FF] hover:bg-blue-700 text-white text-xs font-semibold transition"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Open / Download PDF
+          </a>
+        </div>
       </div>
 
       {filteredLib.length === 0 ? (

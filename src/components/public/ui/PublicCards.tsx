@@ -1,12 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  AlertCircle,
   ArrowRight,
   Award,
   BookOpen,
   Calendar,
   CheckCircle2,
   Clock,
+  Eye,
+  EyeOff,
   GraduationCap,
+  KeyRound,
+  Lock,
   MapPin,
   Search,
   ShieldCheck,
@@ -18,6 +23,7 @@ import { BRAND_IMAGES, INSTITUTE_INFO } from '../../../data/catalogSeed';
 import { formatLkr } from '../../../lib/firestoreService';
 import { CmsItem, Course, SpecialProgramme } from '../../../types/lms';
 import { getCourseSlug, getEventSlug, PublicPage } from '../../../lib/publicRoutes';
+import { PendingPasswordChangeState } from '../../../context/AuthContext';
 
 export interface PublicFacultyProfile {
   id: string;
@@ -55,7 +61,8 @@ export const CourseCard: React.FC<{
   onViewDetails: (course: Course) => void;
   onApply: (course: Course) => void;
 }> = React.memo(({ course, isCompared, onToggleCompare, onViewDetails, onApply }) => {
-  const isFree = course.courseFeeLkr === 0;
+  const isFree = Boolean(course.isFree);
+  const feeUnconfigured = !isFree && course.feeConfigured === false;
   const cover = getCourseCoverImage(course);
 
   return (
@@ -119,10 +126,16 @@ export const CourseCard: React.FC<{
               className={`text-sm font-bold font-mono tabular-nums ${
                 isFree
                   ? 'text-emerald-700 dark:text-emerald-400'
-                  : 'text-[#101D35] dark:text-white'
+                  : feeUnconfigured
+                    ? 'text-amber-700 dark:text-amber-400 font-sans text-xs'
+                    : 'text-[#101D35] dark:text-white'
               }`}
             >
-              {isFree ? '100% Free Tuition' : formatLkr(course.courseFeeLkr)}
+              {isFree
+                ? 'FREE (100% Free Tuition)'
+                : feeUnconfigured
+                  ? 'Pending Admin Setup'
+                  : formatLkr(course.courseFeeLkr)}
             </div>
           </div>
 
@@ -612,7 +625,18 @@ export const StudentPortalEntry: React.FC<{
   userDisplayName?: string;
   userRole?: string;
   authError: string | null;
+  pendingPasswordChange: PendingPasswordChangeState | null;
   onGoogleSignIn: () => Promise<void>;
+  onStudentCredentialsLogin: (
+    identifier: string,
+    password: string
+  ) => Promise<{ ok: boolean; requiresPasswordChange?: boolean; error?: string }>;
+  onCompleteFirstLoginPassword: (newPassword: string) => Promise<{ ok: boolean; error?: string }>;
+  onActivateAccount: (
+    activationToken: string,
+    newPassword: string
+  ) => Promise<{ ok: boolean; error?: string }>;
+  onCancelPasswordChange: () => void;
   onOpenPortal: () => void;
   onNavigate: (page: PublicPage) => void;
 }> = ({
@@ -620,118 +644,431 @@ export const StudentPortalEntry: React.FC<{
   userDisplayName,
   userRole,
   authError,
+  pendingPasswordChange,
   onGoogleSignIn,
+  onStudentCredentialsLogin,
+  onCompleteFirstLoginPassword,
+  onActivateAccount,
+  onCancelPasswordChange,
   onOpenPortal,
   onNavigate,
-}) => (
-  <section className="py-16 sm:py-24 bg-[#F5F7FA] dark:bg-[#0A1324]">
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="grid grid-cols-1 lg:grid-cols-12 rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl bg-white dark:bg-[#101D35]">
-        {/* Left Navy Panel */}
-        <div className="lg:col-span-5 bg-[#101D35] text-white p-8 sm:p-10 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <img
-                src={BRAND_IMAGES.officialLogo}
-                alt="TECHMAN COLLEGE logo"
-                className="w-11 h-11 rounded-xl object-cover border border-white/15"
-              />
-              <div>
-                <div className="text-sm font-extrabold tracking-tight">TECHMAN COLLEGE</div>
-                <div className="text-[11px] text-sky-400">{INSTITUTE_INFO.establishedLabel}</div>
+}) => {
+  const [loginMethod, setLoginMethod] = useState<'student_id' | 'google'>('student_id');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [activationToken, setActivationToken] = useState<string>('');
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const token = (params.get('activate') || '').trim();
+      if (token) setActivationToken(token);
+    } catch {
+      // ignore URL parsing error
+    }
+  }, []);
+
+  const isPasswordSetupMode = Boolean(pendingPasswordChange || activationToken);
+
+  const pwChecks = {
+    length: newPassword.length >= 8,
+    upper: /[A-Z]/.test(newPassword),
+    lower: /[a-z]/.test(newPassword),
+    digit: /\d/.test(newPassword),
+    match: newPassword.length > 0 && newPassword === confirmPassword,
+  };
+  const canSubmitNewPassword =
+    pwChecks.length && pwChecks.upper && pwChecks.lower && pwChecks.digit && pwChecks.match;
+
+  const handleStudentLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    if (!identifier.trim() || !password) {
+      setLocalError('Enter both your Student ID (or Username / Email) and password.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await onStudentCredentialsLogin(identifier.trim(), password);
+      if (!res.ok) {
+        setLocalError(res.error || 'Invalid Student ID or password.');
+        return;
+      }
+      setPassword('');
+      if (!res.requiresPasswordChange) {
+        onOpenPortal();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handlePasswordSetupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    if (!canSubmitNewPassword) {
+      setLocalError('Please satisfy all password requirements and confirm your new password.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = pendingPasswordChange
+        ? await onCompleteFirstLoginPassword(newPassword)
+        : await onActivateAccount(activationToken, newPassword);
+      if (!res.ok) {
+        setLocalError(res.error || 'Unable to set your new password.');
+        return;
+      }
+      setNewPassword('');
+      setConfirmPassword('');
+      setActivationToken('');
+      if (window.location.search.includes('activate=')) {
+        window.history.replaceState({}, '', '/student-login');
+      }
+      onOpenPortal();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const combinedError = localError || authError;
+
+  return (
+    <section className="py-16 sm:py-24 bg-[#F5F7FA] dark:bg-[#0A1324]">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl bg-white dark:bg-[#101D35]">
+          {/* Left Navy Panel */}
+          <div className="lg:col-span-5 bg-[#101D35] text-white p-8 sm:p-10 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <img
+                  src={BRAND_IMAGES.officialLogo}
+                  alt="TECHMAN COLLEGE logo"
+                  className="w-11 h-11 rounded-xl object-cover border border-white/15"
+                />
+                <div>
+                  <div className="text-sm font-extrabold tracking-tight">TECHMAN COLLEGE</div>
+                  <div className="text-[11px] text-sky-400">{INSTITUTE_INFO.establishedLabel}</div>
+                </div>
               </div>
+
+              <h1 className="mt-8 text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">
+                Unified Role-Scoped LMS Portal
+              </h1>
+              <p className="mt-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Students can sign in directly with their official TECHMAN Student ID &amp; password
+                or verified Google SSO. Lecturers, Admins, and Super Owners sign in via Google SSO.
+              </p>
+
+              <ul className="mt-6 space-y-2.5 text-xs text-slate-200">
+                {[
+                  'Published course syllabuses, lessons & attendance sync',
+                  'TECHMAN AI Personal Tutor (EN / TA / SI)',
+                  'Assignments, timed exams & instant gradebook',
+                  'LKR fee status, receipts & verified QR certificates',
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#1677FF] shrink-0 mt-0.5" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            <h1 className="mt-8 text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">
-              Unified Role-Scoped LMS Portal
-            </h1>
-            <p className="mt-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Sign in securely with your verified Google account to access your personalized
-              Student, Lecturer, Branch Admin, Coordinator, Accountant, or Super Admin dashboard.
-            </p>
-
-            <ul className="mt-6 space-y-2.5 text-xs text-slate-200">
-              {[
-                'Course lessons, live classes & attendance sync',
-                'TECHMAN AI Personal Tutor (EN / TA / SI)',
-                'Assignments, timed exams & instant gradebook',
-                'LKR fee status, receipts & verified QR certificates',
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#1677FF] shrink-0 mt-0.5" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="mt-8 pt-6 border-t border-white/10 text-[11px] text-slate-400">
-            Protected by Firebase Authentication &amp; Role-Based Security Rules.
-          </div>
-        </div>
-
-        {/* Right Sign-In Panel */}
-        <div className="lg:col-span-7 p-8 sm:p-12 flex flex-col justify-center">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1677FF] dark:text-sky-400">
-            Single Sign-On Access
-          </div>
-          <h2 className="mt-2 text-2xl font-extrabold text-[#101D35] dark:text-white">
-            {isSignedIn ? `Welcome back, ${userDisplayName || 'Member'}` : 'Sign in to TECHMAN LMS'}
-          </h2>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-            {isSignedIn
-              ? `You are signed in with role ${userRole || 'STUDENT'}. Continue directly to your workspace.`
-              : 'Use your registered TECHMAN COLLEGE Google email. Your role permissions are verified automatically on the backend.'}
-          </p>
-
-          {authError && (
-            <div className="mt-4 p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300">
-              {authError}
+            <div className="mt-8 pt-6 border-t border-white/10 text-[11px] text-slate-400">
+              Protected by salted password hashing, mandatory first-login password setup, Firebase
+              Auth &amp; Role-Based Security Rules.
             </div>
-          )}
+          </div>
 
-          <div className="mt-7 space-y-3">
-            {isSignedIn ? (
-              <button
-                type="button"
-                onClick={onOpenPortal}
-                className="w-full py-3.5 px-5 rounded-xl bg-[#1677FF] hover:bg-blue-700 text-white text-sm font-semibold inline-flex items-center justify-center gap-2 transition cursor-pointer"
-              >
-                Enter Role-Scoped LMS Portal
-                <ArrowRight className="w-4 h-4" />
-              </button>
+          {/* Right Sign-In Panel */}
+          <div className="lg:col-span-7 p-8 sm:p-12 flex flex-col justify-center">
+            {isPasswordSetupMode ? (
+              <div>
+                <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">
+                  <Lock className="w-3.5 h-3.5" />
+                  Mandatory Password Setup
+                </div>
+                <h2 className="mt-2 text-2xl font-extrabold text-[#101D35] dark:text-white">
+                  Set Your Personal Password
+                </h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  {pendingPasswordChange
+                    ? `Welcome ${pendingPasswordChange.student.fullName} (${pendingPasswordChange.student.studentId}). ${pendingPasswordChange.message}`
+                    : 'Your one-time TECHMAN COLLEGE activation link is ready. Create a strong personal password to activate your Student Portal.'}
+                </p>
+
+                {combinedError && (
+                  <div className="mt-4 p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{combinedError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handlePasswordSetupSubmit} className="mt-5 space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                      New Personal Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        autoComplete="new-password"
+                        placeholder="Minimum 8 characters"
+                        className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-[#101D35] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1677FF]"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword((v) => !v)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        aria-label="Toggle password visibility"
+                      >
+                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
+                      placeholder="Re-enter your new password"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-[#101D35] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1677FF]"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-[11px]">
+                    {[
+                      { ok: pwChecks.length, label: 'At least 8 characters' },
+                      { ok: pwChecks.upper, label: 'One uppercase letter (A-Z)' },
+                      { ok: pwChecks.lower, label: 'One lowercase letter (a-z)' },
+                      { ok: pwChecks.digit, label: 'One number (0-9)' },
+                      { ok: pwChecks.match, label: 'Passwords match' },
+                    ].map((rule) => (
+                      <div
+                        key={rule.label}
+                        className={`flex items-center gap-1.5 ${
+                          rule.ok
+                            ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
+                            : 'text-slate-500 dark:text-slate-400'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>{rule.label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 pt-1">
+                    <button
+                      type="submit"
+                      disabled={submitting || !canSubmitNewPassword}
+                      className="flex-1 py-3 px-5 rounded-xl bg-[#1677FF] hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold inline-flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                      {submitting ? 'Activating Account...' : 'Save Password & Open Student Portal'}
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocalError(null);
+                        setActivationToken('');
+                        onCancelPasswordChange();
+                      }}
+                      className="py-3 px-4 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => void onGoogleSignIn()}
-                className="w-full py-3.5 px-5 rounded-xl bg-[#101D35] hover:bg-[#172A45] dark:bg-[#1677FF] dark:hover:bg-blue-600 text-white text-sm font-semibold inline-flex items-center justify-center gap-2.5 transition cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                Continue with Google SSO
-              </button>
-            )}
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1677FF] dark:text-sky-400">
+                  Secure Portal Authentication
+                </div>
+                <h2 className="mt-2 text-2xl font-extrabold text-[#101D35] dark:text-white">
+                  {isSignedIn
+                    ? `Welcome back, ${userDisplayName || 'Member'}`
+                    : 'Sign in to TECHMAN COLLEGE LMS'}
+                </h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  {isSignedIn
+                    ? `You are signed in with role ${userRole || 'STUDENT'}. Continue directly to your workspace.`
+                    : 'Students can log in with their official Student ID & password, or use verified Google SSO.'}
+                </p>
 
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => onNavigate('admissions')}
-                className="py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-[#101D35] dark:text-slate-200 hover:border-[#1677FF] transition cursor-pointer"
-              >
-                New Student? Apply Now
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate('verify')}
-                className="py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-[#101D35] dark:text-slate-200 hover:border-[#1677FF] transition cursor-pointer"
-              >
-                Verify Certificate
-              </button>
-            </div>
+                {combinedError && (
+                  <div className="mt-4 p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{combinedError}</span>
+                  </div>
+                )}
+
+                <div className="mt-6 space-y-4">
+                  {isSignedIn ? (
+                    <button
+                      type="button"
+                      onClick={onOpenPortal}
+                      className="w-full py-3.5 px-5 rounded-xl bg-[#1677FF] hover:bg-blue-700 text-white text-sm font-semibold inline-flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                      Enter Role-Scoped LMS Portal
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLoginMethod('student_id');
+                            setLocalError(null);
+                          }}
+                          className={`py-2 px-3 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                            loginMethod === 'student_id'
+                              ? 'bg-white dark:bg-[#172A45] text-[#101D35] dark:text-white shadow-sm'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-[#101D35]'
+                          }`}
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                          Student ID &amp; Password
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLoginMethod('google');
+                            setLocalError(null);
+                          }}
+                          className={`py-2 px-3 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                            loginMethod === 'google'
+                              ? 'bg-white dark:bg-[#172A45] text-[#101D35] dark:text-white shadow-sm'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-[#101D35]'
+                          }`}
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          Google SSO (Staff / Admin)
+                        </button>
+                      </div>
+
+                      {loginMethod === 'student_id' ? (
+                        <form onSubmit={handleStudentLogin} className="space-y-3.5">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                              Student ID, Username, or Registered Email
+                            </label>
+                            <input
+                              type="text"
+                              value={identifier}
+                              onChange={(e) => setIdentifier(e.target.value)}
+                              placeholder="e.g. TM-2027-00101"
+                              autoComplete="username"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-[#101D35] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1677FF]"
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                              Password (or Temporary First-Login Password)
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showPassword ? 'text' : 'password'}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Enter your password"
+                                autoComplete="current-password"
+                                className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-[#101D35] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1677FF]"
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword((v) => !v)}
+                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                aria-label="Toggle password visibility"
+                              >
+                                {showPassword ? (
+                                  <EyeOff className="w-4 h-4" />
+                                ) : (
+                                  <Eye className="w-4 h-4" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={submitting}
+                            className="w-full py-3.5 px-5 rounded-xl bg-[#1677FF] hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold inline-flex items-center justify-center gap-2 transition cursor-pointer"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                            {submitting ? 'Verifying Credentials...' : 'Sign In to Student Portal'}
+                          </button>
+
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            First time logging in? Use the temporary password emailed by TECHMAN
+                            COLLEGE Admissions; you will be prompted to set a personal password
+                            immediately.
+                          </p>
+                        </form>
+                      ) : (
+                        <div className="space-y-3">
+                          <button
+                            type="button"
+                            onClick={() => void onGoogleSignIn()}
+                            className="w-full py-3.5 px-5 rounded-xl bg-[#101D35] hover:bg-[#172A45] dark:bg-[#1677FF] dark:hover:bg-blue-600 text-white text-sm font-semibold inline-flex items-center justify-center gap-2.5 transition cursor-pointer"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                            Continue with Google SSO
+                          </button>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Recommended for Super Owner, Admins, Lecturers, Coordinators, and
+                            students with linked Google accounts.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => onNavigate('admissions')}
+                      className="py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-[#101D35] dark:text-slate-200 hover:border-[#1677FF] transition cursor-pointer"
+                    >
+                      New Student? Apply Now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onNavigate('verify')}
+                      className="py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-[#101D35] dark:text-slate-200 hover:border-[#1677FF] transition cursor-pointer"
+                    >
+                      Verify Certificate
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 export { getCourseSlug, getEventSlug };

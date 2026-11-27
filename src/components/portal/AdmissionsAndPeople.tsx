@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { auth, db } from '../../lib/firebase';
 import { logAuditEvent, makeSafeId } from '../../lib/firestoreService';
 import {
   buildFirestoreApplicationPayload,
@@ -233,7 +233,40 @@ export const AdmissionsAndPeople: React.FC<AdmissionsPeopleProps> = ({
         details: `Set ${app.fullName} (${app.courseName}) to ${nextStatus}${assignedStudentId ? ` · Student ID: ${assignedStudentId}` : ''}`,
       });
 
-      setFeedback(`Updated ${app.applicationNumber} to "${nextStatus}".`);
+      if (nextStatus === 'Approved' || nextStatus === 'Enrolled') {
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          if (token && app.email) {
+            await fetch('/api/emails/send', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                emailType: 'admission_confirmation',
+                toEmail: app.email.toLowerCase(),
+                toName: app.fullName,
+                applicationNumber: app.applicationNumber,
+                studentId: assignedStudentId || app.assignedStudentId || '',
+                courseName: app.courseName,
+                batchName: app.batchName || '2027 Intake',
+                status: nextStatus,
+              }),
+            });
+          }
+        } catch (emailErr) {
+          console.warn('Admission confirmation email warning:', emailErr);
+        }
+      }
+
+      setFeedback(
+        `Updated ${app.applicationNumber} to "${nextStatus}"${
+          nextStatus === 'Approved' || nextStatus === 'Enrolled'
+            ? ' & dispatched Admission Confirmation email.'
+            : '.'
+        }`
+      );
       await onRefreshData();
     } finally {
       setBusyId(null);
